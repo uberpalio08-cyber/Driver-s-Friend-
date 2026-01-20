@@ -47,13 +47,13 @@ const App: React.FC = () => {
     return R * c;
   };
 
-  // Solicitar Wake Lock para manter o app vivo
   const requestWakeLock = async () => {
     if ('wakeLock' in navigator) {
       try {
         wakeLock.current = await (navigator as any).wakeLock.request('screen');
+        console.log("Wake Lock active");
       } catch (err) {
-        console.error(`${err.name}, ${err.message}`);
+        console.warn("Wake Lock failed:", err);
       }
     }
   };
@@ -70,11 +70,7 @@ const App: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        setState({
-          ...INITIAL_STATE,
-          ...parsed,
-          isLoaded: true
-        });
+        setState({ ...INITIAL_STATE, ...parsed, isLoaded: true });
       } catch (e) {
         setState(prev => ({ ...prev, isLoaded: true }));
       }
@@ -92,6 +88,13 @@ const App: React.FC = () => {
   useEffect(() => {
     if (phase !== 'IDLE') {
       requestWakeLock();
+      
+      const options = {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 10000
+      };
+
       watchId.current = navigator.geolocation.watchPosition(
         (pos) => {
           if (lastPos.current) {
@@ -102,10 +105,11 @@ const App: React.FC = () => {
               pos.coords.longitude
             );
             
-            if (dist > 0.005) {
-              if (phase === 'PARTICULAR') setKmParticular(prev => prev + dist);
-              if (phase === 'DESLOCAMENTO') setKmDeslocamento(prev => prev + dist);
-              if (phase === 'PASSAGEIRO') setKmPassageiro(prev => prev + dist);
+            // Filtro de ruído: distâncias menores que 10 metros são ignoradas
+            if (dist > 0.01) {
+              if (phase === 'PARTICULAR') setKmParticular(p => p + dist);
+              if (phase === 'DESLOCAMENTO') setKmDeslocamento(p => p + dist);
+              if (phase === 'PASSAGEIRO') setKmPassageiro(p => p + dist);
 
               setState(prev => {
                 if (!prev.user) return prev;
@@ -122,14 +126,15 @@ const App: React.FC = () => {
           }
           lastPos.current = pos.coords;
         },
-        (err) => console.warn("Geo:", err),
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+        (err) => console.error("Geolocation Error:", err),
+        options
       );
     } else {
       releaseWakeLock();
       if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
       lastPos.current = null;
     }
+    
     return () => {
       releaseWakeLock();
       if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
@@ -142,7 +147,8 @@ const App: React.FC = () => {
     const lastRefuel = refuels[refuels.length - 1];
     const fuelPrice = lastRefuel ? lastRefuel.pricePerLiter : 6.0;
 
-    const fuelCost = ((kmDeslocamento + kmPassageiro) / (state.user.calculatedAvgConsumption || 10)) * fuelPrice;
+    const totalRaceKm = kmDeslocamento + kmPassageiro;
+    const fuelCost = (totalRaceKm / (state.user.calculatedAvgConsumption || 10)) * fuelPrice;
     const appTaxAmount = gross * (state.user.appPercentage / 100);
     const maintenanceRes = gross * (state.user.maintenanceReservePercent / 100);
     const emergencyRes = gross * (state.user.emergencyReservePercent / 100);
@@ -213,7 +219,7 @@ const App: React.FC = () => {
   }, [state.currentRaces, state.currentDailyExpenses]);
 
   const renderView = () => {
-    if (!state.isLoaded) return <div className="min-h-screen bg-black flex items-center justify-center text-white font-black uppercase tracking-widest">Iniciando...</div>;
+    if (!state.isLoaded) return <div className="min-h-screen bg-black flex items-center justify-center text-white font-black uppercase tracking-widest">Carregando...</div>;
 
     switch (view) {
       case 'LANDING':

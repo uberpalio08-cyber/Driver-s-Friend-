@@ -18,12 +18,12 @@ const Custos: React.FC<Props> = ({ expenses, onAdd, isWorking }) => {
     isWorkExpense: true
   });
 
-  const categories: { label: ExpenseCategory; icon: any }[] = [
-    { label: 'ALIMENTAÇÃO', icon: Coffee },
-    { label: 'ÁGUA', icon: Droplets },
-    { label: 'LUZ', icon: Zap },
-    { label: 'TELEFONE', icon: Phone },
-    { label: 'OUTROS', icon: MoreHorizontal }
+  const categories = [
+    { label: 'ALIMENTAÇÃO' as ExpenseCategory, icon: Coffee },
+    { label: 'ÁGUA' as ExpenseCategory, icon: Droplets },
+    { label: 'LUZ' as ExpenseCategory, icon: Zap },
+    { label: 'TELEFONE' as ExpenseCategory, icon: Phone },
+    { label: 'OUTROS' as ExpenseCategory, icon: MoreHorizontal }
   ];
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -69,23 +69,27 @@ const Custos: React.FC<Props> = ({ expenses, onAdd, isWorking }) => {
             <p className="text-zinc-300 text-[10px] font-black uppercase tracking-widest">Nenhum gasto lançado</p>
           </div>
         ) : (
-          expenses.slice().reverse().map(exp => (
-            <div key={exp.id} className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-zinc-100 flex items-center justify-between group">
-              <div className="flex items-center gap-5">
-                <div className={`p-4 rounded-2xl ${exp.isWorkExpense ? 'bg-black text-white' : 'bg-zinc-50 text-zinc-400'}`}>
-                  {categories.find(c => c.label === exp.category)?.icon({ size: 22 })}
+          expenses.slice().reverse().map(exp => {
+            const cat = categories.find(c => c.label === exp.category);
+            const CategoryIcon = cat ? cat.icon : MoreHorizontal;
+            return (
+              <div key={exp.id} className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-zinc-100 flex items-center justify-between group">
+                <div className="flex items-center gap-5">
+                  <div className={`p-4 rounded-2xl ${exp.isWorkExpense ? 'bg-black text-white' : 'bg-zinc-50 text-zinc-400'}`}>
+                    <CategoryIcon size={22} />
+                  </div>
+                  <div>
+                    <p className="font-black text-black uppercase text-sm tracking-tight">{exp.category}</p>
+                    <p className="text-[9px] text-zinc-400 font-black uppercase tracking-widest">{exp.isWorkExpense ? 'Custo de Turno' : 'Custo Pessoal'}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-black text-black uppercase text-sm tracking-tight">{exp.category}</p>
-                  <p className="text-[9px] text-zinc-400 font-black uppercase tracking-widest">{exp.isWorkExpense ? 'Custo de Turno' : 'Custo Pessoal'}</p>
+                <div className="text-right">
+                  <p className="font-black text-black text-md italic">R$ {exp.amount.toFixed(2)}</p>
+                  <p className="text-[8px] text-zinc-300 uppercase font-black">{new Date(exp.date).toLocaleDateString()}</p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="font-black text-black text-md italic">R$ {exp.amount.toFixed(2)}</p>
-                <p className="text-[8px] text-zinc-300 uppercase font-black">{new Date(exp.date).toLocaleDateString()}</p>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
@@ -95,16 +99,19 @@ const Custos: React.FC<Props> = ({ expenses, onAdd, isWorking }) => {
             <h2 className="text-2xl font-black text-black text-center uppercase tracking-tighter">Novo Gasto</h2>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-3 gap-2">
-                {categories.map(cat => (
-                  <button 
-                    key={cat.label} type="button"
-                    onClick={() => setData({ ...data, category: cat.label })}
-                    className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-1 transition-all ${data.category === cat.label ? 'border-black bg-black text-white' : 'border-zinc-50 text-zinc-400'}`}
-                  >
-                    <cat.icon size={18} />
-                    <span className="text-[8px] font-black uppercase tracking-tighter">{cat.label}</span>
-                  </button>
-                ))}
+                {categories.map(cat => {
+                  const CatIcon = cat.icon;
+                  return (
+                    <button 
+                      key={cat.label} type="button"
+                      onClick={() => setData({ ...data, category: cat.label })}
+                      className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-1 transition-all ${data.category === cat.label ? 'border-black bg-black text-white' : 'border-zinc-50 text-zinc-400'}`}
+                    >
+                      <CatIcon size={18} />
+                      <span className="text-[8px] font-black uppercase tracking-tighter">{cat.label}</span>
+                    </button>
+                  );
+                })}
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Valor (R$)</label>
