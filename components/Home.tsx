@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { UserProfile, TrackingPhase, MaintenanceTask, Race, Expense } from '../types';
-import { Play, Navigation, Users, Car, Droplets, Target, CheckCircle, Clock, MapPin, Settings2, ShieldCheck } from 'lucide-react';
+import { Play, Navigation, Users, Car, Droplets, Target, CheckCircle, Clock, MapPin, ExternalLink, ShieldCheck } from 'lucide-react';
 
 interface Props {
   user: UserProfile;
@@ -12,16 +12,16 @@ interface Props {
   currentRaces: Race[];
   currentDailyExpenses: Expense[];
   maintenance: MaintenanceTask[];
+  onTogglePiP: () => void;
 }
 
-const Home: React.FC<Props> = ({ user, phase, setPhase, kms, onFinishSession, onFinishRace, currentRaces, currentDailyExpenses }) => {
+const Home: React.FC<Props> = ({ user, phase, setPhase, kms, onFinishSession, onFinishRace, currentRaces, currentDailyExpenses, onTogglePiP }) => {
   const [showStartSessionDialog, setShowStartSessionDialog] = useState(false);
   const [showFinishSessionDialog, setShowFinishSessionDialog] = useState(false);
   const [showRaceGrossDialog, setShowRaceGrossDialog] = useState(false);
   const [startOdo, setStartOdo] = useState(user.lastOdometer?.toString() || '0');
   const [endOdo, setEndOdo] = useState('');
   const [grossInput, setGrossInput] = useState('');
-  const [overlayEnabled, setOverlayEnabled] = useState(false);
 
   const totalNetToday = useMemo(() => {
     return currentRaces.reduce((acc, r) => acc + (r.netProfit || 0), 0) - 
@@ -43,29 +43,24 @@ const Home: React.FC<Props> = ({ user, phase, setPhase, kms, onFinishSession, on
         </div>
       </header>
 
-      {/* Card de Permissão de Sobreposição */}
-      <div className={`p-6 rounded-[2.5rem] border transition-all duration-500 ${overlayEnabled ? 'bg-zinc-100 border-zinc-200' : 'bg-black border-zinc-800'}`}>
-        <div className="flex justify-between items-start mb-4">
-          <div className="space-y-1">
-            <h3 className={`text-sm font-black uppercase tracking-tight ${overlayEnabled ? 'text-black' : 'text-white'}`}>Modo Sobreposição</h3>
-            <p className="text-[10px] text-zinc-500 font-bold uppercase">Funcionar sobre outros Apps</p>
+      {/* Botão de Ativação do Modo Bubble (PiP) */}
+      {phase !== 'IDLE' && (
+        <button 
+          onClick={onTogglePiP}
+          className="w-full bg-white border-2 border-zinc-200 p-6 rounded-[2.5rem] flex items-center justify-between group active:scale-95 transition-all shadow-xl"
+        >
+          <div className="flex items-center gap-4 text-left">
+            <div className="bg-black p-4 rounded-2xl text-white pulse-effect">
+              <ExternalLink size={24} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-black uppercase tracking-tight">Ativar Ícone Flutuante</h3>
+              <p className="text-[10px] text-zinc-500 font-bold uppercase">Sobrepor Waze/Uber/99</p>
+            </div>
           </div>
-          <button 
-            onClick={() => setOverlayEnabled(!overlayEnabled)}
-            className={`w-12 h-6 rounded-full relative transition-colors ${overlayEnabled ? 'bg-green-500' : 'bg-zinc-700'}`}
-          >
-            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${overlayEnabled ? 'left-7' : 'left-1'}`} />
-          </button>
-        </div>
-        {!overlayEnabled && (
-          <div className="flex items-center gap-3 bg-white/5 p-3 rounded-2xl">
-            <ShieldCheck size={18} className="text-zinc-400" />
-            <p className="text-[8px] text-zinc-500 font-black uppercase leading-tight">
-              Ative para manter o Driver's Friend visível enquanto usa o Waze ou Uber Driver.
-            </p>
-          </div>
-        )}
-      </div>
+          <div className="bg-zinc-100 px-3 py-1 rounded-full text-[9px] font-black text-zinc-500 uppercase">ATIVAR</div>
+        </button>
+      )}
 
       {/* Meta Card */}
       <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-[2.5rem] shadow-2xl space-y-5">
@@ -75,11 +70,11 @@ const Home: React.FC<Props> = ({ user, phase, setPhase, kms, onFinishSession, on
         </div>
         <div className="flex items-baseline gap-2">
           <p className="text-3xl font-black text-white">R$ {user.dailyGoal.toFixed(0)}</p>
-          <p className="text-[10px] text-zinc-500 font-bold uppercase">Sugestão</p>
+          <p className="text-[10px] text-zinc-500 font-bold uppercase">Meta do Dia</p>
         </div>
         <div className="space-y-2">
           <div className="flex justify-between text-[10px] font-black text-zinc-500 uppercase">
-            <span className="text-outline text-white">Progresso</span>
+            <span className="text-white">Progresso</span>
             <span>{goalProgress}%</span>
           </div>
           <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
@@ -161,10 +156,10 @@ const Home: React.FC<Props> = ({ user, phase, setPhase, kms, onFinishSession, on
         </div>
       </div>
 
-      {/* Modais com Alta Visibilidade */}
+      {/* Modais */}
       {showRaceGrossDialog && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-8">
-          <div className="bg-white w-full rounded-[2.5rem] p-8 space-y-6 shadow-2xl border-4 border-zinc-100">
+          <div className="bg-white w-full rounded-[2.5rem] p-8 space-y-6 shadow-2xl">
             <div className="text-center">
               <h2 className="text-2xl font-black text-black uppercase tracking-tighter">Valor no App</h2>
               <p className="text-[10px] text-zinc-400 font-bold uppercase mt-1">Quanto você ganhou nesta corrida?</p>
@@ -174,14 +169,14 @@ const Home: React.FC<Props> = ({ user, phase, setPhase, kms, onFinishSession, on
               <input autoFocus type="number" step="0.01" className="w-full bg-zinc-50 border-2 border-zinc-200 rounded-[2rem] pl-16 pr-6 py-6 text-3xl font-black outline-none focus:border-black text-black" placeholder="0.00" value={grossInput} onChange={e => setGrossInput(e.target.value)} />
             </div>
             <button onClick={() => { onFinishRace(parseFloat(grossInput) || 0); setGrossInput(''); setShowRaceGrossDialog(false); }} className="w-full bg-black text-white py-6 rounded-3xl font-black text-xl shadow-xl active:scale-95 transition-all uppercase tracking-widest">Salvar Valor</button>
-            <button onClick={() => setShowRaceGrossDialog(false)} className="w-full text-zinc-400 font-black uppercase text-[10px] tracking-widest py-2">Cancelar</button>
+            <button onClick={() => setShowRaceGrossDialog(false)} className="w-full text-zinc-400 font-black uppercase text-[10px] tracking-widest py-2 text-center">Cancelar</button>
           </div>
         </div>
       )}
 
       {showStartSessionDialog && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-8">
-          <div className="bg-white w-full rounded-[2.5rem] p-8 space-y-6 border-4 border-zinc-100">
+          <div className="bg-white w-full rounded-[2.5rem] p-8 space-y-6 border border-zinc-100 shadow-2xl">
             <div className="text-center">
               <h2 className="text-xl font-black text-black uppercase tracking-tighter">Km de Partida</h2>
               <p className="text-[10px] text-zinc-400 font-bold uppercase mt-1">Confira o painel do seu carro agora</p>
@@ -194,7 +189,7 @@ const Home: React.FC<Props> = ({ user, phase, setPhase, kms, onFinishSession, on
 
       {showFinishSessionDialog && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-8">
-          <div className="bg-white w-full rounded-[3rem] p-10 space-y-8 text-center border-4 border-zinc-100">
+          <div className="bg-white w-full rounded-[3rem] p-10 space-y-8 text-center border-4 border-zinc-100 shadow-2xl">
             <div>
               <h2 className="text-2xl font-black text-black uppercase tracking-tighter">Km de Chegada</h2>
               <p className="text-zinc-400 text-[11px] font-bold uppercase mt-2 px-4">Informe o KM final para calcular o lucro real.</p>

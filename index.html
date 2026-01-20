@@ -50,6 +50,15 @@
             border-radius: 50%;
             animation: pulse-ring 2s infinite;
         }
+
+        /* Ocultar elementos técnicos do PiP */
+        #pip-canvas, #pip-video {
+            position: fixed;
+            pointer-events: none;
+            opacity: 0;
+            left: -9999px;
+            top: -9999px;
+        }
     </style>
 <script type="importmap">
 {
@@ -67,6 +76,10 @@
 </head>
 <body class="font-sans">
     <div id="root"></div>
+    <!-- Elementos para o Modo Flutuante Nativo (PiP) -->
+    <canvas id="pip-canvas" width="200" height="200"></canvas>
+    <video id="pip-video" autoplay muted playsinline></video>
+    
     <script type="module" src="./index.tsx"></script>
 </body>
 </html>

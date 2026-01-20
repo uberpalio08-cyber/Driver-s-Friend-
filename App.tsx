@@ -36,6 +36,7 @@ const App: React.FC = () => {
   const lastPos = useRef<GeolocationCoordinates | null>(null);
   const watchId = useRef<number | null>(null);
   const wakeLock = useRef<any>(null);
+  const pipVideoRef = useRef<HTMLVideoElement | null>(null);
 
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371;
@@ -58,8 +59,68 @@ const App: React.FC = () => {
     }
   };
 
+  // Lógica de Ícone Flutuante Nativo (Bubble via PiP)
+  const togglePiP = async () => {
+    const canvas = document.getElementById('pip-canvas') as HTMLCanvasElement;
+    const video = document.getElementById('pip-video') as HTMLVideoElement;
+    if (!canvas || !video) return;
+
+    if (document.pictureInPictureElement) {
+      await document.exitPictureInPicture();
+    } else {
+      try {
+        const stream = canvas.captureStream(10);
+        video.srcObject = stream;
+        video.onloadedmetadata = () => video.requestPictureInPicture();
+      } catch (e) {
+        console.error("PiP falhou", e);
+        alert("Seu aparelho não suporta o modo flutuante nativo.");
+      }
+    }
+  };
+
+  // Atualizar o Canvas do PiP em tempo real
   useEffect(() => {
-    const saved = localStorage.getItem('drivers_friend_data_v4');
+    if (phase === 'IDLE') return;
+    const canvas = document.getElementById('pip-canvas') as HTMLCanvasElement;
+    const ctx = canvas?.getContext('2d');
+    if (!ctx) return;
+
+    const totalNetToday = state.currentRaces.reduce((acc, r) => acc + r.netProfit, 0) - 
+                         state.currentDailyExpenses.reduce((acc, e) => acc + e.amount, 0);
+
+    const updateCanvas = () => {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, 200, 200);
+      
+      // Borda Neon
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 10;
+      ctx.strokeRect(5, 5, 190, 190);
+
+      // Texto
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 24px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('DRIVER FRIEND', 100, 40);
+      
+      ctx.font = 'bold 45px Arial';
+      ctx.fillText(`R$ ${Math.floor(totalNetToday)}`, 100, 100);
+      
+      ctx.font = 'bold 20px Arial';
+      ctx.fillStyle = phase === 'PASSAGEIRO' ? '#00FF00' : '#888888';
+      ctx.fillText(phase, 100, 150);
+
+      if (document.pictureInPictureElement) {
+        requestAnimationFrame(updateCanvas);
+      }
+    };
+    
+    updateCanvas();
+  }, [phase, state.currentRaces, state.currentDailyExpenses]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('drivers_friend_data_v5');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -74,13 +135,22 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (state.isLoaded) {
-      localStorage.setItem('drivers_friend_data_v4', JSON.stringify(state));
+      localStorage.setItem('drivers_friend_data_v5', JSON.stringify(state));
     }
   }, [state]);
 
+  // Solicitar localização ao iniciar serviço
   useEffect(() => {
     if (phase !== 'IDLE') {
       requestWakeLock();
+      
+      // Pedir permissão explicitamente (ajuda no Android a manter fundo)
+      if (navigator.permissions) {
+        navigator.permissions.query({ name: 'geolocation' as any }).then(res => {
+          if (res.state === 'denied') alert("Por favor, habilite a localização 'Sempre' nas configurações para o app funcionar em segundo plano.");
+        });
+      }
+
       if (phase === 'DESLOCAMENTO' && !raceStartTime) setRaceStartTime(Date.now());
       
       const options = { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 };
@@ -88,7 +158,7 @@ const App: React.FC = () => {
         (pos) => {
           if (lastPos.current) {
             const dist = getDistance(lastPos.current.latitude, lastPos.current.longitude, pos.coords.latitude, pos.coords.longitude);
-            if (dist > 0.005) { // Sensibilidade aumentada para 5 metros
+            if (dist > 0.005) { 
               if (phase === 'PARTICULAR') setKmParticular(p => p + dist);
               if (phase === 'DESLOCAMENTO') setKmDeslocamento(p => p + dist);
               if (phase === 'PASSAGEIRO') setKmPassageiro(p => p + dist);
@@ -194,7 +264,7 @@ const App: React.FC = () => {
             switch (view) {
               case 'LANDING': return <Landing user={state.user} onStart={() => setView('ONBOARDING')} onSelect={() => setView('HOME')} onNewRegistration={() => { localStorage.clear(); window.location.reload(); }} />;
               case 'ONBOARDING': return <Onboarding onComplete={(profile) => { setState(p => ({ ...p, user: profile })); setView('HOME'); }} />;
-              case 'HOME': return state.user ? <Home user={state.user} phase={phase} setPhase={setPhase} kms={{ kmParticular, kmDeslocamento, kmPassageiro }} onFinishSession={saveSession} onFinishRace={addRace} currentRaces={state.currentRaces} currentDailyExpenses={state.currentDailyExpenses} maintenance={state.maintenance} /> : null;
+              case 'HOME': return state.user ? <Home user={state.user} phase={phase} setPhase={setPhase} kms={{ kmParticular, kmDeslocamento, kmPassageiro }} onFinishSession={saveSession} onFinishRace={addRace} currentRaces={state.currentRaces} currentDailyExpenses={state.currentDailyExpenses} maintenance={state.maintenance} onTogglePiP={togglePiP} /> : null;
               case 'FINANCEIRO': return state.user ? <Financeiro sessions={state.sessions} expenses={state.expenses} maintenance={state.maintenance} user={state.user} /> : null;
               case 'POSTOS': return state.user ? <Postos user={state.user} stations={state.stations} onAddStation={(name) => { const s = { id: Date.now().toString(), name }; setState(p => ({ ...p, stations: [...p.stations, s] })); return s; }} onRefuel={(e) => {
                 const updatedStations = state.stations.map(s => s.id === e.stationId ? { ...s, lastGasPrice: e.fuelType === 'GASOLINA' ? e.pricePerLiter : s.lastGasPrice, lastEtanolPrice: e.fuelType === 'ETANOL' ? e.pricePerLiter : s.lastEtanolPrice } : s);
@@ -205,10 +275,10 @@ const App: React.FC = () => {
               default: return null;
             }
           })()
-        ) : <div className="min-h-screen bg-transparent flex items-center justify-center text-zinc-900 font-black">CARREGANDO...</div>}
+        ) : <div className="min-h-screen bg-transparent flex items-center justify-center text-zinc-900 font-black italic">DF FRIENDING...</div>}
       </div>
       
-      {/* Botão Flutuante que aparece apenas durante o expediente */}
+      {/* Bolha de controle dentro do app */}
       {state.user && phase !== 'IDLE' && (
         <FloatingBubble 
           phase={phase} 
@@ -220,7 +290,7 @@ const App: React.FC = () => {
       {state.user && phase !== 'IDLE' && <FloatingTracker phase={phase} netToday={totalNetToday} currentView={view} onSwitchPhase={setPhase} onAddRace={() => setView('HOME')} />}
 
       {state.user && view !== 'ONBOARDING' && view !== 'LANDING' && (
-        <nav className="fixed bottom-6 left-6 right-6 max-w-[calc(448px-3rem)] mx-auto bg-black/95 backdrop-blur-xl border border-white/10 px-6 py-5 rounded-[2.5rem] flex justify-around items-center safe-area-bottom z-50">
+        <nav className="fixed bottom-6 left-6 right-6 max-w-[calc(448px-3rem)] mx-auto bg-black/95 backdrop-blur-xl border border-white/10 px-6 py-5 rounded-[2.5rem] flex justify-around items-center safe-area-bottom z-50 shadow-2xl">
           <button onClick={() => setView('HOME')} className={`transition-all ${view === 'HOME' ? 'text-white scale-110' : 'text-zinc-600'}`}><LayoutDashboard size={20} /></button>
           <button onClick={() => setView('POSTOS')} className={`transition-all ${view === 'POSTOS' ? 'text-white scale-110' : 'text-zinc-600'}`}><Fuel size={20} /></button>
           <button onClick={() => setView('CUSTOS')} className={`transition-all ${view === 'CUSTOS' ? 'text-white scale-110' : 'text-zinc-600'}`}><Receipt size={20} /></button>
