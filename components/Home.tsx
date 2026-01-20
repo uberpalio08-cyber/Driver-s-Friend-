@@ -20,19 +20,22 @@ const Home: React.FC<Props> = ({ user, phase, setPhase, kms, onFinishSession, on
   const [showFinishSessionDialog, setShowFinishSessionDialog] = useState(false);
   const [showRaceGrossDialog, setShowRaceGrossDialog] = useState(false);
   
-  const [startOdo, setStartOdo] = useState(user.lastOdometer.toString());
+  const [startOdo, setStartOdo] = useState(user.lastOdometer?.toString() || '0');
   const [endOdo, setEndOdo] = useState('');
   const [grossInput, setGrossInput] = useState('');
 
-  // Lógica de Sugestão de Meta Diária
+  // Lógica de Sugestão de Meta Diária com proteção contra divisão por zero
   const suggestedGoal = useMemo(() => {
-    const dailyMaint = (user.maintenanceReservePercent / 100) * user.dailyGoal;
-    const dailyEmerg = (user.emergencyReservePercent / 100) * user.dailyGoal;
-    // Custo de combustível estimado para 150km base
+    if (!user) return 150;
+    const consumption = user.calculatedAvgConsumption || 10;
+    const dailyGoal = user.dailyGoal || 150;
+    const dailyMaint = (user.maintenanceReservePercent / 100) * dailyGoal;
+    const dailyEmerg = (user.emergencyReservePercent / 100) * dailyGoal;
+    
     const avgKmPerDay = 150; 
-    const fuelCost = (avgKmPerDay / user.calculatedAvgConsumption) * 6.0; 
+    const fuelCost = (avgKmPerDay / consumption) * 6.0; 
     const totalCosts = dailyMaint + dailyEmerg + fuelCost;
-    // Queremos que os custos sejam no máximo 60% do bruto, sobrando 40%
+    
     const suggested = totalCosts / 0.6; 
     return Math.ceil(suggested / 10) * 10; 
   }, [user]);
@@ -48,23 +51,29 @@ const Home: React.FC<Props> = ({ user, phase, setPhase, kms, onFinishSession, on
     setShowStartSessionDialog(false);
   };
 
-  const totalNetToday = currentRaces.reduce((acc, r) => acc + r.netProfit, 0) - currentDailyExpenses.reduce((acc, e) => acc + e.amount, 0);
-  const goalProgress = Math.min(100, Math.round((totalNetToday / user.dailyGoal) * 100));
+  const currentRacesList = currentRaces || [];
+  const currentExpensesList = currentDailyExpenses || [];
+
+  const totalNetToday = currentRacesList.reduce((acc, r) => acc + (r.netProfit || 0), 0) - 
+                        currentExpensesList.reduce((acc, e) => acc + (e.amount || 0), 0);
+  
+  const dailyGoalValue = user.dailyGoal || 150;
+  const goalProgress = Math.min(100, Math.round((totalNetToday / dailyGoalValue) * 100));
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header - No topo escuro, elementos claros */}
+      {/* Header */}
       <header className="flex justify-between items-center pt-8 pb-4">
         <div className="max-w-[75%]">
           <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Drivers Intelligence</p>
           <h1 className="text-3xl font-black text-white leading-tight">{user.name}'s Friend</h1>
         </div>
         <div className="bg-white/10 border border-white/20 px-4 py-2 rounded-2xl text-[10px] font-black text-white uppercase flex items-center gap-2">
-          <Droplets size={14} className="text-zinc-400" /> {user.currentFuelLevel.toFixed(1)}L
+          <Droplets size={14} className="text-zinc-400" /> {(user.currentFuelLevel || 0).toFixed(1)}L
         </div>
       </header>
 
-      {/* Insight de Metas - Preto e Branco de alto contraste */}
+      {/* Insight de Metas */}
       <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-[2.5rem] shadow-2xl space-y-6">
         <div className="flex justify-between items-start">
           <div className="space-y-1">
@@ -101,7 +110,7 @@ const Home: React.FC<Props> = ({ user, phase, setPhase, kms, onFinishSession, on
         </div>
       </div>
 
-      {/* Operação - No centro do gradiente */}
+      {/* Operação */}
       <div className="space-y-4">
         {phase === 'IDLE' ? (
           <button 
@@ -150,17 +159,17 @@ const Home: React.FC<Props> = ({ user, phase, setPhase, kms, onFinishSession, on
         )}
       </div>
 
-      {/* Atividade Recente - No fundo claro, elementos escuros */}
+      {/* Atividade Recente */}
       <div className="bg-zinc-100 rounded-[2.5rem] p-6 border border-zinc-200 shadow-sm space-y-5">
         <h3 className="text-lg font-black text-black flex items-center gap-2">
           <Wallet size={20} /> Recentes
         </h3>
         
         <div className="space-y-3">
-          {currentRaces.length === 0 ? (
+          {currentRacesList.length === 0 ? (
             <div className="py-10 text-center text-zinc-400 text-[10px] font-black uppercase border-2 border-dashed border-zinc-300 rounded-3xl">Sem atividades hoje</div>
           ) : (
-            currentRaces.slice().reverse().map(race => (
+            currentRacesList.slice().reverse().map(race => (
               <div key={race.id} className="bg-white p-5 rounded-3xl flex items-center justify-between border border-zinc-200 group">
                 <div className="flex items-center gap-4">
                   <div className="bg-black text-white p-3 rounded-2xl"><Wallet size={18} /></div>
@@ -179,7 +188,7 @@ const Home: React.FC<Props> = ({ user, phase, setPhase, kms, onFinishSession, on
         </div>
       </div>
 
-      {/* Modais Preto e Branco */}
+      {/* Modais */}
       {showRaceGrossDialog && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-8">
           <div className="bg-white w-full rounded-[2.5rem] p-8 space-y-6">
@@ -220,7 +229,7 @@ const Home: React.FC<Props> = ({ user, phase, setPhase, kms, onFinishSession, on
             </div>
             <div className="flex gap-4">
               <button onClick={() => setShowFinishSessionDialog(false)} className="flex-1 bg-zinc-100 py-5 rounded-3xl font-black text-zinc-400 uppercase text-xs">Voltar</button>
-              <button onClick={() => onFinishSession(parseFloat(startOdo), parseFloat(endOdo))} className="flex-1 bg-black text-white py-5 rounded-3xl font-black uppercase text-xs">Encerrar</button>
+              <button onClick={() => onFinishSession(parseFloat(startOdo) || 0, parseFloat(endOdo) || 0)} className="flex-1 bg-black text-white py-5 rounded-3xl font-black uppercase text-xs">Encerrar</button>
             </div>
           </div>
         </div>

@@ -1,6 +1,11 @@
 {
   "name": "Driver's Friend",
-  "description": "Gerenciador completo para motoristas de aplicativo com rastreio de KM por fase (Particular, Deslocamento, Passageiro).",
+  "short_name": "DF Friend",
+  "description": "Gerenciador profissional para motoristas. Inteligência B&W para lucro máximo.",
+  "theme_color": "#000000",
+  "background_color": "#000000",
+  "display": "standalone",
+  "orientation": "portrait",
   "requestFramePermissions": [
     "geolocation"
   ]
