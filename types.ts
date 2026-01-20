@@ -1,5 +1,4 @@
 
-// Definindo os tipos básicos da aplicação
 export type AppView = 'LANDING' | 'ONBOARDING' | 'HOME' | 'FINANCEIRO' | 'POSTOS' | 'CUSTOS' | 'VEICULO';
 export type TrackingPhase = 'IDLE' | 'PARTICULAR' | 'DESLOCAMENTO' | 'PASSAGEIRO';
 export type FuelType = 'GASOLINA' | 'ETANOL';
@@ -27,12 +26,14 @@ export interface Expense {
   category: ExpenseCategory;
   description: string;
   amount: number;
-  isWorkExpense: boolean; // Se true, abate do lucro do dia/turno
+  isWorkExpense: boolean;
 }
 
 export interface Race {
   id: string;
   date: number;
+  acceptedAt: number;
+  finishedAt: number;
   kmDeslocamento: number;
   kmPassageiro: number;
   grossEarnings: number;
@@ -50,8 +51,10 @@ export interface UserProfile {
   appPercentage: number;
   maintenanceReservePercent: number;
   emergencyReservePercent: number;
-  dailyGoal: number;
-  monthlyGoal: number;
+  desiredSalary: number; // Novo
+  personalFixedCosts: number; // Novo (Aluguel, Internet, etc)
+  workingDaysPerMonth: number; // Novo
+  dailyGoal: number; // Calculada
   currentFuelLevel: number; 
   lastOdometer: number; 
   calculatedAvgConsumption: number; 
@@ -82,7 +85,7 @@ export interface TripSession {
   endOdometer: number;
   kmParticular: number;
   races: Race[];
-  dailyExpenses: Expense[]; // Gastos (lanches, etc) feitos durante este turno
+  dailyExpenses: Expense[];
   totalGross: number;
   totalNet: number;
 }
@@ -95,6 +98,6 @@ export interface AppState {
   expenses: Expense[];
   maintenance: MaintenanceTask[];
   currentRaces: Race[];
-  currentDailyExpenses: Expense[]; // Gastos do turno atual
+  currentDailyExpenses: Expense[];
   isLoaded: boolean;
 }

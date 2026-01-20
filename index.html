@@ -10,21 +10,37 @@
             overscroll-behavior-y: contain;
             -webkit-tap-highlight-color: transparent;
             user-select: none;
-            background-color: #000000;
+            /* Gradiente moderno começando branco e terminando preto */
+            background: linear-gradient(to bottom, #ffffff 0%, #e4e4e7 35%, #18181b 65%, #000000 100%);
+            background-attachment: fixed;
             min-height: 100vh;
-            color: #ffffff;
             margin: 0;
             padding: 0;
+            color: #18181b;
         }
         #root {
             min-height: 100vh;
         }
+        /* Força cor preta em inputs para visibilidade total */
+        input, select, textarea {
+            color: #000000 !important;
+            background-color: #f4f4f5 !important;
+            border-color: #d4d4d8 !important;
+        }
+        input::placeholder {
+            color: #71717a !important;
+        }
+        /* Classe utilitária para contorno de texto se necessário */
+        .text-outline {
+            text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+        }
+        
         .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
         .safe-area-top { padding-top: env(safe-area-inset-top); }
         
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #555; border-radius: 10px; }
 
         @keyframes float {
             0% { transform: translateY(0px); }
@@ -32,6 +48,12 @@
             100% { transform: translateY(0px); }
         }
         .animate-float { animation: float 3s ease-in-out infinite; }
+
+        @media print {
+            nav, .print-hidden { display: none !important; }
+            body { background: white !important; color: black !important; }
+            .print-only { display: block !important; }
+        }
     </style>
 <script type="importmap">
 {

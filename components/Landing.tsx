@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { UserCircle, Car, ArrowRight } from 'lucide-react';
 import { UserProfile } from '../types';
@@ -12,15 +11,13 @@ interface Props {
 
 const Landing: React.FC<Props> = ({ user, onStart, onSelect, onNewRegistration }) => {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-10 bg-black text-white overflow-hidden relative">
-      <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-zinc-900 to-black"></div>
-      
+    <div className="min-h-screen flex flex-col items-center justify-center p-10 bg-transparent text-zinc-900 overflow-hidden relative">
       <div className="z-10 text-center mb-16 space-y-6">
-        <div className="w-24 h-24 bg-white rounded-[2rem] mx-auto flex items-center justify-center shadow-[0_0_50px_rgba(255,255,255,0.15)] animate-float">
-          <Car size={48} className="text-black" />
+        <div className="w-24 h-24 bg-black rounded-[2rem] mx-auto flex items-center justify-center shadow-2xl animate-float">
+          <Car size={48} className="text-white" />
         </div>
         <div className="space-y-1">
-          <h1 className="text-4xl font-black tracking-tighter uppercase italic leading-none">Driver's Friend</h1>
+          <h1 className="text-4xl font-black tracking-tighter uppercase italic leading-none text-zinc-900">Driver's Friend</h1>
           <p className="text-zinc-500 font-bold uppercase tracking-[0.3em] text-[10px]">Intelligence System</p>
         </div>
       </div>
@@ -31,9 +28,9 @@ const Landing: React.FC<Props> = ({ user, onStart, onSelect, onNewRegistration }
             onClick={onStart}
             className="w-full group transition-transform active:scale-95"
           >
-            <div className="bg-white p-10 rounded-[3rem] shadow-2xl flex flex-col items-center gap-4">
-              <h2 className="text-2xl font-black text-black uppercase flex items-center gap-2">
-                COMEÇAR <ArrowRight className="text-black" size={24} />
+            <div className="bg-black p-10 rounded-[3rem] shadow-2xl flex flex-col items-center gap-4">
+              <h2 className="text-2xl font-black text-white uppercase flex items-center gap-2">
+                COMEÇAR <ArrowRight className="text-white" size={24} />
               </h2>
               <p className="text-zinc-400 text-[10px] font-black uppercase tracking-widest">Acompanhe seus lucros</p>
             </div>
@@ -58,7 +55,7 @@ const Landing: React.FC<Props> = ({ user, onStart, onSelect, onNewRegistration }
 
             <button 
               onClick={onNewRegistration}
-              className="w-full py-4 text-zinc-600 hover:text-white transition-colors text-[10px] font-black uppercase tracking-widest"
+              className="w-full py-4 text-zinc-600 hover:text-zinc-900 transition-colors text-[10px] font-black uppercase tracking-widest"
             >
               Excluir dados e recomeçar
             </button>
@@ -66,7 +63,7 @@ const Landing: React.FC<Props> = ({ user, onStart, onSelect, onNewRegistration }
         )}
       </div>
       
-      <p className="absolute bottom-10 text-zinc-800 text-[8px] uppercase font-black tracking-[0.5em]">Professional Tool v2.0</p>
+      <p className="absolute bottom-10 text-zinc-400 text-[8px] uppercase font-black tracking-[0.5em]">Professional Tool v2.0</p>
     </div>
   );
 };
