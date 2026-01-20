@@ -8,6 +8,7 @@ import Postos from './components/Postos';
 import Custos from './components/Custos';
 import Veiculo from './components/Veiculo';
 import FloatingTracker from './components/FloatingTracker';
+import FloatingBubble from './components/FloatingBubble';
 import { LayoutDashboard, Wallet, Fuel, Receipt, Car } from 'lucide-react';
 
 const INITIAL_STATE: AppState = {
@@ -34,6 +35,7 @@ const App: React.FC = () => {
   
   const lastPos = useRef<GeolocationCoordinates | null>(null);
   const watchId = useRef<number | null>(null);
+  const wakeLock = useRef<any>(null);
 
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371;
@@ -46,8 +48,18 @@ const App: React.FC = () => {
     return R * c;
   };
 
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLock.current = await (navigator as any).wakeLock.request('screen');
+      }
+    } catch (err) {
+      console.error(`${err.name}, ${err.message}`);
+    }
+  };
+
   useEffect(() => {
-    const saved = localStorage.getItem('drivers_friend_data_noir_v3');
+    const saved = localStorage.getItem('drivers_friend_data_v4');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -62,12 +74,13 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (state.isLoaded) {
-      localStorage.setItem('drivers_friend_data_noir_v3', JSON.stringify(state));
+      localStorage.setItem('drivers_friend_data_v4', JSON.stringify(state));
     }
   }, [state]);
 
   useEffect(() => {
     if (phase !== 'IDLE') {
+      requestWakeLock();
       if (phase === 'DESLOCAMENTO' && !raceStartTime) setRaceStartTime(Date.now());
       
       const options = { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 };
@@ -75,7 +88,7 @@ const App: React.FC = () => {
         (pos) => {
           if (lastPos.current) {
             const dist = getDistance(lastPos.current.latitude, lastPos.current.longitude, pos.coords.latitude, pos.coords.longitude);
-            if (dist > 0.01) {
+            if (dist > 0.005) { // Sensibilidade aumentada para 5 metros
               if (phase === 'PARTICULAR') setKmParticular(p => p + dist);
               if (phase === 'DESLOCAMENTO') setKmDeslocamento(p => p + dist);
               if (phase === 'PASSAGEIRO') setKmPassageiro(p => p + dist);
@@ -92,10 +105,17 @@ const App: React.FC = () => {
         options
       );
     } else {
+      if (wakeLock.current) {
+        wakeLock.current.release();
+        wakeLock.current = null;
+      }
       if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
       lastPos.current = null;
     }
-    return () => { if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current); };
+    return () => { 
+      if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current); 
+      if (wakeLock.current) wakeLock.current.release();
+    };
   }, [phase]);
 
   const addRace = (gross: number) => {
@@ -188,6 +208,15 @@ const App: React.FC = () => {
         ) : <div className="min-h-screen bg-transparent flex items-center justify-center text-zinc-900 font-black">CARREGANDO...</div>}
       </div>
       
+      {/* Botão Flutuante que aparece apenas durante o expediente */}
+      {state.user && phase !== 'IDLE' && (
+        <FloatingBubble 
+          phase={phase} 
+          netToday={totalNetToday} 
+          onOpenHome={() => setView('HOME')} 
+        />
+      )}
+
       {state.user && phase !== 'IDLE' && <FloatingTracker phase={phase} netToday={totalNetToday} currentView={view} onSwitchPhase={setPhase} onAddRace={() => setView('HOME')} />}
 
       {state.user && view !== 'ONBOARDING' && view !== 'LANDING' && (
