@@ -11,14 +11,17 @@
             overscroll-behavior-y: contain;
             -webkit-tap-highlight-color: transparent;
             user-select: none;
-            background: linear-gradient(to bottom, #ffffff 0%, #000000 100%) no-repeat fixed;
+            background: #000; /* Fundo sólido preto para contraste imediato */
             min-height: 100vh;
             margin: 0;
             padding: 0;
             color: #ffffff;
             font-family: 'Inter', -apple-system, system-ui, sans-serif;
         }
-        #root { min-height: 100vh; }
+        #root { 
+            min-height: 100vh;
+            background: linear-gradient(to bottom, #444 0%, #000 100%) no-repeat fixed;
+        }
         .text-outline {
             color: #ffffff !important;
             text-shadow: 

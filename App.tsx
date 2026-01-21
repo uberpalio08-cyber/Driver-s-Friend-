@@ -28,7 +28,6 @@ const App: React.FC = () => {
   const [view, setView] = useState<AppView>('LANDING');
   const [phase, setPhase] = useState<TrackingPhase>('IDLE');
   
-  // KMs acumulados na fase atual
   const [kmParticularGps, setKmParticularGps] = useState(0);
   const [kmDeslocamento, setKmDeslocamento] = useState(0);
   const [kmPassageiro, setKmPassageiro] = useState(0);
@@ -37,7 +36,11 @@ const App: React.FC = () => {
   const lastPos = useRef<GeolocationCoordinates | null>(null);
   const watchId = useRef<number | null>(null);
 
-  const ai = useMemo(() => new GoogleGenAI({ apiKey: process.env.API_KEY || "" }), []);
+  // Acesso seguro à chave de API para evitar crash no navegador
+  const ai = useMemo(() => {
+    const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : '';
+    return new GoogleGenAI({ apiKey: apiKey || "" });
+  }, []);
 
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371;
@@ -111,16 +114,12 @@ const App: React.FC = () => {
 
   const addRace = (gross: number) => {
     if (!state.user) return;
-    
-    // Pegamos o preço do combustível mais barato cadastrado ou padrão
     const allPrices = state.stations.flatMap(s => [s.lastGasPrice, s.lastEtanolPrice]).filter(p => p !== undefined) as number[];
     const fuelPrice = allPrices.length > 0 ? Math.min(...allPrices) : 5.89;
-    
     const totalRaceKm = kmDeslocamento + kmPassageiro;
     const avgCons = state.user.calculatedAvgConsumption || 10;
     const litersSpent = totalRaceKm / avgCons;
     const fuelCost = litersSpent * fuelPrice;
-    
     const appTaxAmount = gross * (state.user.appPercentage / 100);
     const maintenanceRes = (gross * (state.user.maintenanceReservePercent / 100));
     const emergencyRes = (gross * (state.user.emergencyReservePercent / 100));
@@ -150,30 +149,21 @@ const App: React.FC = () => {
       } : null
     }));
     
-    // Limpa apenas KMs da corrida finalizada
     setKmDeslocamento(0);
     setKmPassageiro(0);
-    setPhase('PARTICULAR'); // Volta para rastrear KM particular até a próxima corrida
+    setPhase('PARTICULAR'); 
     setRaceStartTime(null);
   };
 
   const saveSession = (startOdometer: number, endOdometer: number) => {
     if (!state.user) return;
-
-    // KM total rodado segundo o painel
-    const odometerTotalDistance = endOdometer - startOdometer;
-    
-    // KM que o GPS rastreou como particular durante todo o turno
     const finalKmParticular = kmParticularGps;
-    
     const avgCons = state.user.calculatedAvgConsumption || 10;
     const litersSpentParticular = finalKmParticular / avgCons;
-
     const allPrices = state.stations.flatMap(s => [s.lastGasPrice, s.lastEtanolPrice]).filter(p => p !== undefined) as number[];
     const fuelPrice = allPrices.length > 0 ? Math.min(...allPrices) : 5.89;
     const particularFuelCostValue = litersSpentParticular * fuelPrice;
 
-    // Criar despesa automática do combustível gasto no particular
     const particularFuelExpense: Expense = {
       id: `AUTO_PART_${Date.now()}`,
       date: Date.now(),
@@ -218,8 +208,8 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col max-w-md mx-auto relative overflow-hidden">
-      <div className="flex-1 overflow-auto pb-24 text-black">
+    <div className="min-h-screen flex flex-col max-w-md mx-auto relative overflow-hidden bg-transparent">
+      <div className="flex-1 overflow-auto pb-24 text-white">
         {state.isLoaded ? (
           (() => {
             switch (view) {
