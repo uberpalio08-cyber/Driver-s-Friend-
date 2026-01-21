@@ -16,7 +16,7 @@ const Custos: React.FC<Props> = ({ expenses, refuels, onAdd }) => {
 
   const allCosts = [
     ...expenses,
-    ...refuels.map(r => ({ id: r.id, date: r.date, category: 'COMBUSTÍVEL', description: 'Posto', amount: r.liters * r.pricePerLiter, isWorkExpense: true }))
+    ...refuels.map(r => ({ id: r.id, date: r.date, category: 'COMBUSTÍVEL', description: 'Abastecimento', amount: r.liters * r.pricePerLiter, isWorkExpense: true }))
   ].sort((a, b) => (b.date as number) - (a.date as number));
 
   return (

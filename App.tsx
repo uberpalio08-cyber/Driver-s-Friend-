@@ -28,7 +28,8 @@ const App: React.FC = () => {
   const [view, setView] = useState<AppView>('LANDING');
   const [phase, setPhase] = useState<TrackingPhase>('IDLE');
   
-  const [kmParticular, setKmParticular] = useState(0);
+  // KMs acumulados na fase atual
+  const [kmParticularGps, setKmParticularGps] = useState(0);
   const [kmDeslocamento, setKmDeslocamento] = useState(0);
   const [kmPassageiro, setKmPassageiro] = useState(0);
   const [raceStartTime, setRaceStartTime] = useState<number | null>(null);
@@ -50,7 +51,7 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    const saved = localStorage.getItem('drivers_friend_v19_clean');
+    const saved = localStorage.getItem('drivers_friend_v22_pro');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -65,7 +66,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (state.isLoaded) {
-      localStorage.setItem('drivers_friend_v19_clean', JSON.stringify(state));
+      localStorage.setItem('drivers_friend_v22_pro', JSON.stringify(state));
     }
   }, [state]);
 
@@ -76,15 +77,9 @@ const App: React.FC = () => {
           if (lastPos.current) {
             const dist = getDistance(lastPos.current.latitude, lastPos.current.longitude, pos.coords.latitude, pos.coords.longitude);
             if (dist > 0.005) { 
-              if (phase === 'PARTICULAR') setKmParticular(p => p + dist);
+              if (phase === 'PARTICULAR') setKmParticularGps(p => p + dist);
               else if (phase === 'DESLOCAMENTO') setKmDeslocamento(p => p + dist);
               else if (phase === 'PASSAGEIRO') setKmPassageiro(p => p + dist);
-              
-              setState(prev => {
-                if (!prev.user) return prev;
-                const fuelSpent = dist / (prev.user.calculatedAvgConsumption || 10);
-                return { ...prev, user: { ...prev.user, currentFuelLevel: Math.max(0, prev.user.currentFuelLevel - fuelSpent) }};
-              });
             }
           }
           lastPos.current = pos.coords;
@@ -99,21 +94,36 @@ const App: React.FC = () => {
     return () => { if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current); };
   }, [phase]);
 
+  const startShift = (odo: number, config: { appName: string, appPercentage: number, useFixed: boolean, fixedVal: number }) => {
+    setState(prev => ({
+      ...prev,
+      user: prev.user ? {
+        ...prev.user,
+        appName: config.appName,
+        appPercentage: config.appPercentage,
+        useFixedFare: config.useFixed,
+        fixedFareValue: config.fixedVal,
+        lastOdometer: odo
+      } : null
+    }));
+    setPhase('PARTICULAR');
+  };
+
   const addRace = (gross: number) => {
     if (!state.user) return;
     
+    // Pegamos o preço do combustível mais barato cadastrado ou padrão
     const allPrices = state.stations.flatMap(s => [s.lastGasPrice, s.lastEtanolPrice]).filter(p => p !== undefined) as number[];
     const fuelPrice = allPrices.length > 0 ? Math.min(...allPrices) : 5.89;
     
     const totalRaceKm = kmDeslocamento + kmPassageiro;
-    const fuelCost = (totalRaceKm / (state.user.calculatedAvgConsumption || 10)) * fuelPrice;
+    const avgCons = state.user.calculatedAvgConsumption || 10;
+    const litersSpent = totalRaceKm / avgCons;
+    const fuelCost = litersSpent * fuelPrice;
     
-    // Reservas que reduzem o Lucro Limpo (Salário do motorista)
     const appTaxAmount = gross * (state.user.appPercentage / 100);
     const maintenanceRes = (gross * (state.user.maintenanceReservePercent / 100));
     const emergencyRes = (gross * (state.user.emergencyReservePercent / 100));
-
-    // Lucro Limpo = O que entra no bolso do motorista após todas as deduções
     const netProfit = gross - appTaxAmount - fuelCost - maintenanceRes - emergencyRes;
     
     const newRace: Race = {
@@ -128,57 +138,111 @@ const App: React.FC = () => {
       fuelCost,
       appTax: appTaxAmount,
       maintenanceReserve: maintenanceRes,
-      emergencyReserve: emergencyRes,
-      score: netProfit > (totalRaceKm * 2.5) ? 'GOOD' : 'OK'
+      emergencyReserve: emergencyRes
     };
     
-    setState(prev => ({ ...prev, currentRaces: [...prev.currentRaces, newRace] }));
+    setState(prev => ({ 
+      ...prev, 
+      currentRaces: [...prev.currentRaces, newRace],
+      user: prev.user ? { 
+        ...prev.user, 
+        currentFuelLevel: Math.max(0, prev.user.currentFuelLevel - litersSpent) 
+      } : null
+    }));
+    
+    // Limpa apenas KMs da corrida finalizada
     setKmDeslocamento(0);
     setKmPassageiro(0);
-    setPhase('PARTICULAR'); 
+    setPhase('PARTICULAR'); // Volta para rastrear KM particular até a próxima corrida
+    setRaceStartTime(null);
   };
 
   const saveSession = (startOdometer: number, endOdometer: number) => {
     if (!state.user) return;
-    const totalGross = state.currentRaces.reduce((acc, r) => acc + r.grossEarnings, 0);
-    const totalNet = state.currentRaces.reduce((acc, r) => acc + r.netProfit, 0);
+
+    // KM total rodado segundo o painel
+    const odometerTotalDistance = endOdometer - startOdometer;
     
+    // KM que o GPS rastreou como particular durante todo o turno
+    const finalKmParticular = kmParticularGps;
+    
+    const avgCons = state.user.calculatedAvgConsumption || 10;
+    const litersSpentParticular = finalKmParticular / avgCons;
+
+    const allPrices = state.stations.flatMap(s => [s.lastGasPrice, s.lastEtanolPrice]).filter(p => p !== undefined) as number[];
+    const fuelPrice = allPrices.length > 0 ? Math.min(...allPrices) : 5.89;
+    const particularFuelCostValue = litersSpentParticular * fuelPrice;
+
+    // Criar despesa automática do combustível gasto no particular
+    const particularFuelExpense: Expense = {
+      id: `AUTO_PART_${Date.now()}`,
+      date: Date.now(),
+      category: 'OUTROS',
+      description: `Combustível Particular (${finalKmParticular.toFixed(1)}km)`,
+      amount: particularFuelCostValue,
+      isWorkExpense: true 
+    };
+
+    const totalGross = state.currentRaces.reduce((acc, r) => acc + r.grossEarnings, 0);
+    const totalNetRaces = state.currentRaces.reduce((acc, r) => acc + r.netProfit, 0);
+
     const newSession: TripSession = {
       id: Date.now().toString(),
       date: Date.now(),
       startOdometer,
       endOdometer,
-      kmParticular,
+      kmParticular: finalKmParticular,
       races: state.currentRaces,
-      dailyExpenses: state.currentDailyExpenses,
+      dailyExpenses: [...state.currentDailyExpenses, particularFuelExpense],
       totalGross,
-      totalNet
+      totalNet: totalNetRaces - particularFuelCostValue 
     };
     
     setState(prev => ({
       ...prev,
       sessions: [...prev.sessions, newSession],
+      expenses: [...prev.expenses, particularFuelExpense],
       currentRaces: [],
       currentDailyExpenses: [],
-      user: prev.user ? { ...prev.user, lastOdometer: endOdometer } : null
+      user: prev.user ? { 
+        ...prev.user, 
+        lastOdometer: endOdometer,
+        currentFuelLevel: Math.max(0, prev.user.currentFuelLevel - litersSpentParticular)
+      } : null
     }));
-    setKmParticular(0);
+    
+    setKmParticularGps(0);
+    setKmDeslocamento(0);
+    setKmPassageiro(0);
     setPhase('IDLE');
   };
 
   return (
     <div className="min-h-screen flex flex-col max-w-md mx-auto relative overflow-hidden">
-      <div className="flex-1 overflow-auto pb-24">
+      <div className="flex-1 overflow-auto pb-24 text-black">
         {state.isLoaded ? (
           (() => {
             switch (view) {
               case 'LANDING': return <Landing user={state.user} onStart={() => setView('ONBOARDING')} onSelect={() => setView('HOME')} onNewRegistration={() => { localStorage.clear(); window.location.reload(); }} />;
               case 'ONBOARDING': return <Onboarding onComplete={(profile) => { setState(p => ({ ...p, user: profile })); setView('HOME'); }} ai={ai} />;
-              case 'HOME': return state.user ? <Home user={state.user} phase={phase} setPhase={(p) => { if (p === 'DESLOCAMENTO') setRaceStartTime(Date.now()); setPhase(p); }} kms={{ kmParticular, kmDeslocamento, kmPassageiro }} onFinishSession={saveSession} onFinishRace={addRace} currentRaces={state.currentRaces} currentDailyExpenses={state.currentDailyExpenses} /> : null;
-              case 'FINANCEIRO': return state.user ? <Financeiro sessions={state.sessions} expenses={state.expenses} maintenance={state.maintenance} user={state.user} /> : null;
-              case 'POSTOS': return state.user ? <Postos user={state.user} stations={state.stations} onAddStation={(name, g, e) => { const s = { id: Date.now().toString(), name, lastGasPrice: g, lastEtanolPrice: e }; setState(p => ({ ...p, stations: [...p.stations, s] })); }} onRefuel={(e) => {
-                setState(p => ({ ...p, refuels: [...p.refuels, e], user: p.user ? { ...p.user, currentFuelLevel: Math.min(p.user.car.tankCapacity, p.user.currentFuelLevel + e.liters), lastOdometer: Math.max(p.user.lastOdometer, e.odometerAtRefuel) } : null }));
-              }} refuels={state.refuels} ai={ai} /> : null;
+              case 'HOME': return state.user ? <Home user={state.user} phase={phase} setPhase={(p) => { if(p === 'DESLOCAMENTO') setRaceStartTime(Date.now()); setPhase(p); }} onStartShift={startShift} kms={{ kmParticular: kmParticularGps, kmDeslocamento, kmPassageiro }} onFinishSession={saveSession} onFinishRace={addRace} currentRaces={state.currentRaces} currentDailyExpenses={state.currentDailyExpenses} /> : null;
+              case 'FINANCEIRO': return state.user ? <Financeiro sessions={state.sessions} expenses={state.expenses} maintenance={state.maintenance} user={state.user} currentRaces={state.currentRaces} currentDailyExpenses={state.currentDailyExpenses} /> : null;
+              case 'POSTOS': return state.user ? <Postos user={state.user} stations={state.stations} onAddStation={(name, g, e) => { const s = { id: Date.now().toString(), name, lastGasPrice: g, lastEtanolPrice: e }; setState(p => ({ ...p, stations: [...p.stations, s] })); }} onRefuel={(entry) => {
+                setState(p => ({ 
+                  ...p, 
+                  refuels: [...p.refuels, entry], 
+                  user: p.user ? { 
+                    ...p.user, 
+                    currentFuelLevel: entry.isFullTank ? p.user.car.tankCapacity : Math.min(p.user.car.tankCapacity, p.user.currentFuelLevel + entry.liters),
+                    lastOdometer: Math.max(p.user.lastOdometer, entry.odometerAtRefuel) 
+                  } : null,
+                  stations: p.stations.map(s => s.id === entry.stationId ? {
+                    ...s, 
+                    lastGasPrice: entry.fuelType === 'GASOLINA' ? entry.pricePerLiter : s.lastGasPrice,
+                    lastEtanolPrice: entry.fuelType === 'ETANOL' ? entry.pricePerLiter : s.lastEtanolPrice
+                  } : s)
+                }));
+              }} refuels={state.refuels} /> : null;
               case 'CUSTOS': return <Custos expenses={state.expenses} refuels={state.refuels} onAdd={(exp) => setState(p => ({ ...p, expenses: [...p.expenses, exp], currentDailyExpenses: exp.isWorkExpense ? [...p.currentDailyExpenses, exp] : p.currentDailyExpenses }))} isWorking={phase !== 'IDLE'} />;
               case 'VEICULO': return state.user ? <Veiculo user={state.user} maintenance={state.maintenance} onUpsert={(task) => setState(prev => ({ ...prev, maintenance: prev.maintenance.find(m => m.id === task.id) ? prev.maintenance.map(m => m.id === task.id ? task : m) : [...prev.maintenance, task] }))} onUpdateMaintCost={(cost) => setState(prev => ({...prev, user: prev.user ? {...prev.user, maintenanceCostPerKm: cost} : null}))} ai={ai} /> : null;
               default: return null;
@@ -188,7 +252,7 @@ const App: React.FC = () => {
       </div>
       
       {state.user && view !== 'ONBOARDING' && view !== 'LANDING' && (
-        <nav className="fixed bottom-4 left-4 right-4 max-w-[calc(448px-2rem)] mx-auto bg-white border border-black p-2 rounded-2xl flex justify-around items-center safe-area-bottom z-50 shadow-2xl transition-all">
+        <nav className="fixed bottom-4 left-4 right-4 max-w-[calc(448px-2rem)] mx-auto bg-white border border-black p-1.5 rounded-2xl flex justify-around items-center safe-area-bottom z-50 shadow-2xl transition-all">
           <button onClick={() => setView('HOME')} className={`p-2 transition-all ${view === 'HOME' ? 'text-black scale-110' : 'text-zinc-300'}`}><LayoutDashboard size={22} /></button>
           <button onClick={() => setView('POSTOS')} className={`p-2 transition-all ${view === 'POSTOS' ? 'text-black scale-110' : 'text-zinc-300'}`}><Fuel size={22} /></button>
           <button onClick={() => setView('CUSTOS')} className={`p-2 transition-all ${view === 'CUSTOS' ? 'text-black scale-110' : 'text-zinc-300'}`}><Receipt size={22} /></button>
