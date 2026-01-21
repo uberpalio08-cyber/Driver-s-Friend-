@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo } from 'react';
-import { UserProfile, TrackingPhase, MaintenanceTask, Race, Expense } from '../types';
-import { Play, Navigation, Users, Car, Droplets, Target, CheckCircle, Clock, MapPin, ExternalLink, ShieldCheck } from 'lucide-react';
+import { UserProfile, TrackingPhase, Race, Expense } from '../types';
+import { Play, Users, Droplets, Clock, UserPlus, Flag } from 'lucide-react';
 
 interface Props {
   user: UserProfile;
@@ -11,144 +12,119 @@ interface Props {
   onFinishRace: (gross: number) => void;
   currentRaces: Race[];
   currentDailyExpenses: Expense[];
-  maintenance: MaintenanceTask[];
-  onTogglePiP: () => void;
 }
 
-const Home: React.FC<Props> = ({ user, phase, setPhase, kms, onFinishSession, onFinishRace, currentRaces, currentDailyExpenses, onTogglePiP }) => {
-  const [showStartSessionDialog, setShowStartSessionDialog] = useState(false);
-  const [showFinishSessionDialog, setShowFinishSessionDialog] = useState(false);
-  const [showRaceGrossDialog, setShowRaceGrossDialog] = useState(false);
-  const [startOdo, setStartOdo] = useState(user.lastOdometer?.toString() || '0');
+const Home: React.FC<Props> = ({ user, phase, setPhase, kms, onFinishSession, onFinishRace, currentRaces, currentDailyExpenses }) => {
+  const [showStart, setShowStart] = useState(false);
+  const [showEnd, setShowEnd] = useState(false);
+  const [showGross, setShowGross] = useState(false);
+  
+  const [startOdo, setStartOdo] = useState(user.lastOdometer?.toString() || '');
   const [endOdo, setEndOdo] = useState('');
   const [grossInput, setGrossInput] = useState('');
 
-  const totalNetToday = useMemo(() => {
-    return currentRaces.reduce((acc, r) => acc + (r.netProfit || 0), 0) - 
-           currentDailyExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
-  }, [currentRaces, currentDailyExpenses]);
+  // Lucro Limpo Acumulado Hoje (O que de fato é o salário do motorista)
+  const netSalaryToday = useMemo(() => {
+    return currentRaces.reduce((acc, r) => acc + (r.netProfit || 0), 0);
+  }, [currentRaces]);
 
-  const goalProgress = Math.min(100, Math.round((totalNetToday / (user.dailyGoal || 150)) * 100));
+  // Meta diária baseada no Salário Desejado + Custos Fixos Pessoais
+  const dailyTarget = useMemo(() => {
+    return (user.desiredSalary / user.workingDaysPerMonth) + (user.personalFixedCosts / user.workingDaysPerMonth);
+  }, [user]);
+
+  const remainingToGoal = Math.max(0, dailyTarget - netSalaryToday);
+  const progressPercent = Math.min(100, (netSalaryToday / dailyTarget) * 100);
+
   const formatTime = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div className="p-6 space-y-6">
-      <header className="flex justify-between items-center pt-8 pb-4">
-        <div>
-          <p className="text-zinc-600 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Painel Central</p>
-          <h1 className="text-3xl font-black text-zinc-900 leading-tight">Olá, {user.name}</h1>
-        </div>
-        <div className="bg-zinc-900 border border-zinc-700 px-4 py-2 rounded-2xl text-[10px] font-black text-white uppercase flex items-center gap-2 shadow-lg">
-          <Droplets size={14} className="text-zinc-400" /> {user.currentFuelLevel.toFixed(1)}L
-        </div>
+    <div className="p-5 space-y-6 animate-up">
+      <header className="pt-6">
+        <h1 className="text-3xl font-black italic text-outline">Olá, {user.name}</h1>
       </header>
 
-      {/* Botão de Ativação do Modo Bubble (PiP) */}
-      {phase !== 'IDLE' && (
-        <button 
-          onClick={onTogglePiP}
-          className="w-full bg-white border-2 border-zinc-200 p-6 rounded-[2.5rem] flex items-center justify-between group active:scale-95 transition-all shadow-xl"
-        >
-          <div className="flex items-center gap-4 text-left">
-            <div className="bg-black p-4 rounded-2xl text-white pulse-effect">
-              <ExternalLink size={24} />
-            </div>
-            <div>
-              <h3 className="text-sm font-black text-black uppercase tracking-tight">Ativar Ícone Flutuante</h3>
-              <p className="text-[10px] text-zinc-500 font-bold uppercase">Sobrepor Waze/Uber/99</p>
-            </div>
+      {/* Card de Meta Principal - Foco no Restante */}
+      <div className="glass-card p-6 shadow-2xl relative overflow-hidden">
+        <div className="relative z-10 flex justify-between items-end">
+          <div className="space-y-1">
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 text-outline-sm">Falta para a Meta</p>
+            <p className="text-4xl font-black italic text-outline">R$ {remainingToGoal.toFixed(2)}</p>
           </div>
-          <div className="bg-zinc-100 px-3 py-1 rounded-full text-[9px] font-black text-zinc-500 uppercase">ATIVAR</div>
-        </button>
-      )}
-
-      {/* Meta Card */}
-      <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-[2.5rem] shadow-2xl space-y-5">
-        <div className="flex justify-between items-center">
-          <p className="text-zinc-500 text-[9px] font-black uppercase tracking-widest">Meta Bruta Hoje</p>
-          <Target size={16} className="text-zinc-400" />
+          <div className="text-right">
+             <p className="text-[9px] font-bold text-zinc-500 text-outline-sm">Salário Hoje</p>
+             <p className="text-xl font-black text-white text-outline">R$ {netSalaryToday.toFixed(2)}</p>
+          </div>
         </div>
-        <div className="flex items-baseline gap-2">
-          <p className="text-3xl font-black text-white">R$ {user.dailyGoal.toFixed(0)}</p>
-          <p className="text-[10px] text-zinc-500 font-bold uppercase">Meta do Dia</p>
-        </div>
-        <div className="space-y-2">
-          <div className="flex justify-between text-[10px] font-black text-zinc-500 uppercase">
-            <span className="text-white">Progresso</span>
-            <span>{goalProgress}%</span>
-          </div>
-          <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-            <div className="h-full bg-white transition-all duration-1000 shadow-[0_0_10px_rgba(255,255,255,0.4)]" style={{ width: `${goalProgress}%` }} />
-          </div>
+        
+        <div className="mt-5 space-y-2">
+           <div className="h-2.5 bg-white/10 rounded-full overflow-hidden border border-white/5">
+              <div className="h-full bg-white transition-all duration-700 shadow-[0_0_15px_rgba(255,255,255,0.5)]" style={{ width: `${progressPercent}%` }} />
+           </div>
+           <div className="flex justify-between text-[8px] font-black uppercase text-outline-sm italic">
+             <span>Progresso: {progressPercent.toFixed(0)}%</span>
+             <span className="flex items-center gap-1"><Droplets size={10} className="text-blue-400" /> {user.currentFuelLevel.toFixed(1)}L</span>
+           </div>
         </div>
       </div>
 
-      <div className="space-y-4">
+      {/* Controles de Expediente */}
+      <div>
         {phase === 'IDLE' ? (
-          <button onClick={() => setShowStartSessionDialog(true)} className="w-full bg-black text-white p-8 rounded-[2.5rem] shadow-2xl flex flex-col items-center gap-4 active:scale-95 transition-all group">
-            <div className="relative">
-              <div className="absolute inset-0 bg-white/20 rounded-full blur-xl group-hover:blur-2xl transition-all" />
-              <Play size={44} fill="white" className="relative z-10" />
-            </div>
-            <h2 className="text-xl font-black uppercase tracking-tight text-outline">Iniciar Expediente</h2>
+          <button onClick={() => setShowStart(true)} className="w-full bg-white text-black py-10 rounded-3xl shadow-2xl border-2 border-black flex flex-col items-center gap-3 active:scale-95 transition-all">
+            <Play size={32} fill="black" />
+            <span className="text-lg font-black uppercase italic tracking-tighter">Iniciar Expediente</span>
           </button>
         ) : (
-          <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-[2.5rem] p-8 text-white shadow-2xl space-y-6">
-            <div className="flex justify-between items-center">
-              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Status: {phase}</p>
-              <button onClick={() => setShowFinishSessionDialog(true)} className="bg-white text-black px-4 py-2 rounded-xl text-[9px] font-black uppercase shadow-lg">Finalizar</button>
+          <div className="glass-card p-5 space-y-5">
+            <div className="flex justify-between items-center border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
+                <p className="text-[10px] font-black uppercase text-outline-sm">Em Serviço</p>
+              </div>
+              <button onClick={() => setShowEnd(true)} className="text-[10px] font-bold text-zinc-500 uppercase underline">Fechar Dia</button>
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-black/40 p-5 rounded-3xl border border-white/5">
-                <p className="text-zinc-500 text-[9px] font-black uppercase">Lucro Hoje</p>
-                <p className="text-2xl font-black text-outline">R$ {totalNetToday.toFixed(2)}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-black/30 p-4 rounded-2xl border border-white/5 text-center">
+                <p className="text-[8px] font-bold text-zinc-500 uppercase">Km Rodado</p>
+                <p className="text-xl font-black text-outline">{(kms.kmParticular + kms.kmDeslocamento + kms.kmPassageiro).toFixed(1)}</p>
               </div>
-              <div className="bg-black/40 p-5 rounded-3xl border border-white/5">
-                <p className="text-zinc-500 text-[9px] font-black uppercase">KM Rodado</p>
-                <p className="text-2xl font-black text-outline">{(kms.kmParticular + kms.kmDeslocamento + kms.kmPassageiro).toFixed(1)}</p>
+              <div className="bg-black/30 p-4 rounded-2xl border border-white/5 text-center">
+                <p className="text-[8px] font-bold text-zinc-500 uppercase">Tarifa</p>
+                <p className="text-xl font-black text-outline">R$ {user.useFixedFare ? user.fixedFareValue.toFixed(2) : 'Dinâmica'}</p>
               </div>
             </div>
 
             <div className="space-y-3">
-              {phase === 'PARTICULAR' && <button onClick={() => setPhase('DESLOCAMENTO')} className="w-full bg-white text-black py-5 rounded-3xl font-black text-lg flex items-center justify-center gap-3 active:scale-95 transition-all shadow-xl"> <Navigation size={24} /> BUSCAR PAX </button>}
-              {phase === 'DESLOCAMENTO' && <button onClick={() => setPhase('PASSAGEIRO')} className="w-full bg-white text-black py-5 rounded-3xl font-black text-lg flex items-center justify-center gap-3 active:scale-95 transition-all shadow-xl"> <Users size={24} /> INICIAR CORRIDA </button>}
-              {phase === 'PASSAGEIRO' && <button onClick={() => setShowRaceGrossDialog(true)} className="w-full bg-white text-black py-5 rounded-3xl font-black text-lg flex items-center justify-center gap-3 active:scale-95 transition-all shadow-xl"> <CheckCircle size={24} /> FINALIZAR </button>}
+              {phase === 'PARTICULAR' && <button onClick={() => setPhase('DESLOCAMENTO')} className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase italic shadow-xl"><UserPlus className="inline mr-2" size={20} /> Aceitar Corrida</button>}
+              {phase === 'DESLOCAMENTO' && <button onClick={() => setPhase('PASSAGEIRO')} className="w-full bg-zinc-800 text-white py-5 rounded-2xl font-black uppercase italic border border-white/20"><Users className="inline mr-2" size={20} /> Embarcar Pax</button>}
+              {phase === 'PASSAGEIRO' && <button onClick={() => user.useFixedFare ? onFinishRace(user.fixedFareValue) : setShowGross(true)} className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black uppercase italic border border-white/20 shadow-lg"><Flag className="inline mr-2" size={20} /> Finalizar & Cobrar</button>}
             </div>
           </div>
         )}
       </div>
 
-      <div className="space-y-5 pb-32">
-        <h3 className="text-lg font-black text-white flex items-center gap-2 px-2 text-outline">
-          <Clock size={20} className="text-zinc-500" /> Histórico Diário
+      {/* Histórico Simplificado */}
+      <div className="space-y-3 pb-24">
+        <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest px-1 text-outline-sm flex items-center gap-2">
+           <Clock size={14} /> Corridas Recentes
         </h3>
-        
-        <div className="space-y-4">
+        <div className="space-y-2">
           {currentRaces.length === 0 ? (
-            <div className="py-16 text-center text-zinc-600 text-[10px] font-black uppercase border-2 border-dashed border-zinc-800 rounded-[2rem]">Aguardando primeira corrida...</div>
+            <div className="py-10 text-center text-zinc-700 text-[10px] font-black uppercase border-2 border-dashed border-zinc-900 rounded-3xl bg-black/10">Aguardando atividade</div>
           ) : (
             currentRaces.slice().reverse().map(race => (
-              <div key={race.id} className="bg-zinc-900 border border-zinc-800 p-6 rounded-[2.5rem] space-y-4 shadow-xl">
-                <div className="flex justify-between items-start">
+              <div key={race.id} className="glass-card p-4 flex items-center justify-between border border-white/5">
+                <div className="flex items-center gap-4">
+                  <div className={`w-1.5 h-10 rounded-full ${race.score === 'GOOD' ? 'bg-emerald-500' : 'bg-zinc-700'}`} />
                   <div>
-                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Líquido</p>
-                    <p className="text-2xl font-black text-white italic">R$ {race.netProfit.toFixed(2)}</p>
-                  </div>
-                  <div className="bg-white/5 px-3 py-1 rounded-full border border-white/5">
-                    <p className="text-[10px] font-black text-zinc-400">R$ {race.grossEarnings.toFixed(2)} Bruto</p>
+                    <p className="text-[9px] font-bold text-zinc-500 uppercase leading-none mb-1 text-outline-sm">{formatTime(race.acceptedAt)}</p>
+                    <p className="text-xl font-black italic text-outline leading-none">R$ {race.netProfit.toFixed(2)}</p>
                   </div>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4 py-4 border-y border-zinc-800/30">
-                  <div className="flex items-center gap-3">
-                    <Clock size={16} className="text-zinc-500" />
-                    <p className="text-[10px] font-bold text-white">{formatTime(race.acceptedAt)}</p>
-                  </div>
-                  <div className="flex items-center gap-3 justify-end">
-                    <MapPin size={16} className="text-zinc-500" />
-                    <p className="text-[10px] font-bold text-white">{(race.kmDeslocamento + race.kmPassageiro).toFixed(1)} km</p>
-                  </div>
+                <div className="text-right">
+                  <p className="text-[9px] font-bold text-zinc-500 uppercase italic text-outline-sm">Bruto: R$ {race.grossEarnings.toFixed(2)}</p>
                 </div>
               </div>
             ))
@@ -156,49 +132,41 @@ const Home: React.FC<Props> = ({ user, phase, setPhase, kms, onFinishSession, on
         </div>
       </div>
 
-      {/* Modais */}
-      {showRaceGrossDialog && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-8">
-          <div className="bg-white w-full rounded-[2.5rem] p-8 space-y-6 shadow-2xl">
-            <div className="text-center">
-              <h2 className="text-2xl font-black text-black uppercase tracking-tighter">Valor no App</h2>
-              <p className="text-[10px] text-zinc-400 font-bold uppercase mt-1">Quanto você ganhou nesta corrida?</p>
+      {/* Modais de Fluxo */}
+      {showStart && (
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-6">
+          <div className="bg-zinc-900 w-full max-w-sm rounded-[2.5rem] p-10 space-y-8 border border-white/10 shadow-2xl">
+            <h2 className="text-2xl font-black uppercase italic text-center text-outline">Abrir Expediente</h2>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase text-zinc-500 ml-1 text-outline-sm">Km Atual do Painel</label>
+              <input autoFocus type="number" className="w-full text-center text-3xl font-black italic py-4" placeholder="000000" value={startOdo} onChange={e => setStartOdo(e.target.value)} />
             </div>
-            <div className="relative">
-              <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-black text-zinc-400">R$</span>
-              <input autoFocus type="number" step="0.01" className="w-full bg-zinc-50 border-2 border-zinc-200 rounded-[2rem] pl-16 pr-6 py-6 text-3xl font-black outline-none focus:border-black text-black" placeholder="0.00" value={grossInput} onChange={e => setGrossInput(e.target.value)} />
-            </div>
-            <button onClick={() => { onFinishRace(parseFloat(grossInput) || 0); setGrossInput(''); setShowRaceGrossDialog(false); }} className="w-full bg-black text-white py-6 rounded-3xl font-black text-xl shadow-xl active:scale-95 transition-all uppercase tracking-widest">Salvar Valor</button>
-            <button onClick={() => setShowRaceGrossDialog(false)} className="w-full text-zinc-400 font-black uppercase text-[10px] tracking-widest py-2 text-center">Cancelar</button>
+            <button disabled={!startOdo} onClick={() => { setPhase('PARTICULAR'); setShowStart(false); }} className="w-full bg-white text-black py-5 rounded-2xl font-black text-lg uppercase italic active:scale-95 transition-all">Começar Agora</button>
           </div>
         </div>
       )}
 
-      {showStartSessionDialog && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-8">
-          <div className="bg-white w-full rounded-[2.5rem] p-8 space-y-6 border border-zinc-100 shadow-2xl">
-            <div className="text-center">
-              <h2 className="text-xl font-black text-black uppercase tracking-tighter">Km de Partida</h2>
-              <p className="text-[10px] text-zinc-400 font-bold uppercase mt-1">Confira o painel do seu carro agora</p>
-            </div>
-            <input type="number" className="w-full bg-zinc-50 border-2 border-zinc-200 rounded-2xl px-6 py-5 text-2xl font-black outline-none focus:border-black text-black" value={startOdo} onChange={e => setStartOdo(e.target.value)} />
-            <button onClick={() => { setPhase('PARTICULAR'); setShowStartSessionDialog(false); }} className="w-full bg-black text-white py-5 rounded-3xl font-black text-lg uppercase tracking-widest active:scale-95 transition-all">Começar</button>
+      {showGross && (
+        <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-6">
+          <div className="bg-zinc-900 w-full max-w-sm rounded-[2.5rem] p-10 space-y-8 border border-white/10 shadow-2xl">
+            <h2 className="text-2xl font-black uppercase italic text-center text-outline">Valor da Corrida</h2>
+            <input autoFocus type="number" step="0.01" className="w-full py-8 text-5xl font-black text-center" placeholder="0.00" value={grossInput} onChange={e => setGrossInput(e.target.value)} />
+            <button onClick={() => { onFinishRace(parseFloat(grossInput) || 0); setGrossInput(''); setShowGross(false); }} className="w-full bg-white text-black py-6 rounded-2xl font-black text-xl uppercase italic">Lançar Ganho</button>
+            <button onClick={() => setShowGross(false)} className="w-full text-zinc-600 font-bold uppercase text-[10px]">Cancelar</button>
           </div>
         </div>
       )}
 
-      {showFinishSessionDialog && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-8">
-          <div className="bg-white w-full rounded-[3rem] p-10 space-y-8 text-center border-4 border-zinc-100 shadow-2xl">
-            <div>
-              <h2 className="text-2xl font-black text-black uppercase tracking-tighter">Km de Chegada</h2>
-              <p className="text-zinc-400 text-[11px] font-bold uppercase mt-2 px-4">Informe o KM final para calcular o lucro real.</p>
+      {showEnd && (
+        <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-6 text-center">
+          <div className="bg-zinc-900 w-full max-w-sm rounded-[2.5rem] p-10 space-y-8 border border-white/10 shadow-2xl">
+            <h2 className="text-2xl font-black uppercase italic text-outline">Encerrar o Dia</h2>
+            <div className="space-y-2">
+               <p className="text-[10px] font-bold text-zinc-500 uppercase text-outline-sm">Informe o Km Final</p>
+               <input autoFocus type="number" className="w-full py-6 text-4xl font-black text-center" value={endOdo} onChange={e => setEndOdo(e.target.value)} />
             </div>
-            <input type="number" className="w-full bg-zinc-50 border-2 border-zinc-200 rounded-3xl px-8 py-6 text-2xl font-black outline-none text-black" placeholder="000000" value={endOdo} onChange={e => setEndOdo(e.target.value)} />
-            <div className="flex gap-4">
-              <button onClick={() => setShowFinishSessionDialog(false)} className="flex-1 bg-zinc-100 py-5 rounded-3xl font-black text-zinc-400 uppercase text-[10px] tracking-widest">Voltar</button>
-              <button onClick={() => onFinishSession(parseFloat(startOdo) || 0, parseFloat(endOdo) || 0)} className="flex-1 bg-black text-white py-5 rounded-3xl font-black uppercase text-[10px] tracking-widest shadow-xl">Encerrar</button>
-            </div>
+            <button onClick={() => { if(!endOdo) return; onFinishSession(parseFloat(startOdo) || 0, parseFloat(endOdo) || 0); setShowEnd(false); setEndOdo(''); }} className="w-full bg-white text-black py-5 rounded-2xl font-black text-lg uppercase italic">Salvar e Fechar</button>
+            <button onClick={() => setShowEnd(false)} className="text-[10px] font-bold text-zinc-600 uppercase">Voltar</button>
           </div>
         </div>
       )}

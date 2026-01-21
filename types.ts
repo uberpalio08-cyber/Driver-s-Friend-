@@ -18,6 +18,7 @@ export interface MaintenanceTask {
   lastOdo: number;
   interval: number;
   lastCost: number;
+  isAIGenerated?: boolean;
 }
 
 export interface Expense {
@@ -42,6 +43,7 @@ export interface Race {
   appTax: number;
   maintenanceReserve: number;
   emergencyReserve: number;
+  score?: 'GOOD' | 'OK' | 'BAD';
 }
 
 export interface UserProfile {
@@ -51,13 +53,16 @@ export interface UserProfile {
   appPercentage: number;
   maintenanceReservePercent: number;
   emergencyReservePercent: number;
-  desiredSalary: number; // Novo
-  personalFixedCosts: number; // Novo (Aluguel, Internet, etc)
-  workingDaysPerMonth: number; // Novo
-  dailyGoal: number; // Calculada
+  desiredSalary: number;
+  personalFixedCosts: number;
+  workingDaysPerMonth: number;
+  dailyGoal: number;
   currentFuelLevel: number; 
   lastOdometer: number; 
-  calculatedAvgConsumption: number; 
+  calculatedAvgConsumption: number;
+  maintenanceCostPerKm?: number;
+  useFixedFare: boolean;
+  fixedFareValue: number;
 }
 
 export interface GasStation {
