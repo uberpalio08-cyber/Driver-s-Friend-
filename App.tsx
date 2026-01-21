@@ -36,10 +36,20 @@ const App: React.FC = () => {
   const lastPos = useRef<GeolocationCoordinates | null>(null);
   const watchId = useRef<number | null>(null);
 
-  // Acesso seguro à chave de API para evitar crash no navegador
+  // Inicialização ultra-segura da IA para evitar crash no Netlify/Produção
   const ai = useMemo(() => {
-    const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : '';
-    return new GoogleGenAI({ apiKey: apiKey || "" });
+    try {
+      // @ts-ignore - Segurança para ambientes sem process definido
+      const envKey = typeof window !== 'undefined' && (window as any).process?.env?.API_KEY 
+                   // @ts-ignore
+                   ? (window as any).process.env.API_KEY 
+                   : '';
+      
+      return new GoogleGenAI({ apiKey: envKey || "NO_KEY_PROVIDED" });
+    } catch (e) {
+      console.warn("AI initialization failed, falling back to basic mode.");
+      return null;
+    }
   }, []);
 
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -54,15 +64,16 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    const saved = localStorage.getItem('drivers_friend_v22_pro');
-    if (saved) {
-      try {
+    try {
+      const saved = localStorage.getItem('drivers_friend_v22_pro');
+      if (saved) {
         const parsed = JSON.parse(saved);
         setState({ ...INITIAL_STATE, ...parsed, isLoaded: true });
-      } catch (e) {
+      } else {
         setState(prev => ({ ...prev, isLoaded: true }));
       }
-    } else {
+    } catch (e) {
+      console.error("Storage error:", e);
       setState(prev => ({ ...prev, isLoaded: true }));
     }
   }, []);
@@ -74,7 +85,7 @@ const App: React.FC = () => {
   }, [state]);
 
   useEffect(() => {
-    if (phase !== 'IDLE') {
+    if (phase !== 'IDLE' && navigator.geolocation) {
       watchId.current = navigator.geolocation.watchPosition(
         (pos) => {
           if (lastPos.current) {
@@ -207,47 +218,54 @@ const App: React.FC = () => {
     setPhase('IDLE');
   };
 
+  if (!state.isLoaded) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-black">
+        <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-white font-black italic tracking-widest animate-pulse">DRIVERS FRIEND</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex flex-col max-w-md mx-auto relative overflow-hidden bg-transparent">
+    <div className="min-h-screen flex flex-col max-w-md mx-auto relative overflow-hidden">
       <div className="flex-1 overflow-auto pb-24 text-white">
-        {state.isLoaded ? (
-          (() => {
-            switch (view) {
-              case 'LANDING': return <Landing user={state.user} onStart={() => setView('ONBOARDING')} onSelect={() => setView('HOME')} onNewRegistration={() => { localStorage.clear(); window.location.reload(); }} />;
-              case 'ONBOARDING': return <Onboarding onComplete={(profile) => { setState(p => ({ ...p, user: profile })); setView('HOME'); }} ai={ai} />;
-              case 'HOME': return state.user ? <Home user={state.user} phase={phase} setPhase={(p) => { if(p === 'DESLOCAMENTO') setRaceStartTime(Date.now()); setPhase(p); }} onStartShift={startShift} kms={{ kmParticular: kmParticularGps, kmDeslocamento, kmPassageiro }} onFinishSession={saveSession} onFinishRace={addRace} currentRaces={state.currentRaces} currentDailyExpenses={state.currentDailyExpenses} /> : null;
-              case 'FINANCEIRO': return state.user ? <Financeiro sessions={state.sessions} expenses={state.expenses} maintenance={state.maintenance} user={state.user} currentRaces={state.currentRaces} currentDailyExpenses={state.currentDailyExpenses} /> : null;
-              case 'POSTOS': return state.user ? <Postos user={state.user} stations={state.stations} onAddStation={(name, g, e) => { const s = { id: Date.now().toString(), name, lastGasPrice: g, lastEtanolPrice: e }; setState(p => ({ ...p, stations: [...p.stations, s] })); }} onRefuel={(entry) => {
-                setState(p => ({ 
-                  ...p, 
-                  refuels: [...p.refuels, entry], 
-                  user: p.user ? { 
-                    ...p.user, 
-                    currentFuelLevel: entry.isFullTank ? p.user.car.tankCapacity : Math.min(p.user.car.tankCapacity, p.user.currentFuelLevel + entry.liters),
-                    lastOdometer: Math.max(p.user.lastOdometer, entry.odometerAtRefuel) 
-                  } : null,
-                  stations: p.stations.map(s => s.id === entry.stationId ? {
-                    ...s, 
-                    lastGasPrice: entry.fuelType === 'GASOLINA' ? entry.pricePerLiter : s.lastGasPrice,
-                    lastEtanolPrice: entry.fuelType === 'ETANOL' ? entry.pricePerLiter : s.lastEtanolPrice
-                  } : s)
-                }));
-              }} refuels={state.refuels} /> : null;
-              case 'CUSTOS': return <Custos expenses={state.expenses} refuels={state.refuels} onAdd={(exp) => setState(p => ({ ...p, expenses: [...p.expenses, exp], currentDailyExpenses: exp.isWorkExpense ? [...p.currentDailyExpenses, exp] : p.currentDailyExpenses }))} isWorking={phase !== 'IDLE'} />;
-              case 'VEICULO': return state.user ? <Veiculo user={state.user} maintenance={state.maintenance} onUpsert={(task) => setState(prev => ({ ...prev, maintenance: prev.maintenance.find(m => m.id === task.id) ? prev.maintenance.map(m => m.id === task.id ? task : m) : [...prev.maintenance, task] }))} onUpdateMaintCost={(cost) => setState(prev => ({...prev, user: prev.user ? {...prev.user, maintenanceCostPerKm: cost} : null}))} ai={ai} /> : null;
-              default: return null;
-            }
-          })()
-        ) : <div className="min-h-screen flex items-center justify-center text-white font-black italic animate-pulse">Drivers Friend</div>}
+        {(() => {
+          switch (view) {
+            case 'LANDING': return <Landing user={state.user} onStart={() => setView('ONBOARDING')} onSelect={() => setView('HOME')} onNewRegistration={() => { localStorage.clear(); window.location.reload(); }} />;
+            case 'ONBOARDING': return ai ? <Onboarding onComplete={(profile) => { setState(p => ({ ...p, user: profile })); setView('HOME'); }} ai={ai} /> : <div>IA indisponível. Recarregue a página.</div>;
+            case 'HOME': return state.user ? <Home user={state.user} phase={phase} setPhase={(p) => { if(p === 'DESLOCAMENTO') setRaceStartTime(Date.now()); setPhase(p); }} onStartShift={startShift} kms={{ kmParticular: kmParticularGps, kmDeslocamento, kmPassageiro }} onFinishSession={saveSession} onFinishRace={addRace} currentRaces={state.currentRaces} currentDailyExpenses={state.currentDailyExpenses} /> : null;
+            case 'FINANCEIRO': return state.user ? <Financeiro sessions={state.sessions} expenses={state.expenses} maintenance={state.maintenance} user={state.user} currentRaces={state.currentRaces} currentDailyExpenses={state.currentDailyExpenses} /> : null;
+            case 'POSTOS': return state.user ? <Postos user={state.user} stations={state.stations} onAddStation={(name, g, e) => { const s = { id: Date.now().toString(), name, lastGasPrice: g, lastEtanolPrice: e }; setState(p => ({ ...p, stations: [...p.stations, s] })); }} onRefuel={(entry) => {
+              setState(p => ({ 
+                ...p, 
+                refuels: [...p.refuels, entry], 
+                user: p.user ? { 
+                  ...p.user, 
+                  currentFuelLevel: entry.isFullTank ? p.user.car.tankCapacity : Math.min(p.user.car.tankCapacity, p.user.currentFuelLevel + entry.liters),
+                  lastOdometer: Math.max(p.user.lastOdometer, entry.odometerAtRefuel) 
+                } : null,
+                stations: p.stations.map(s => s.id === entry.stationId ? {
+                  ...s, 
+                  lastGasPrice: entry.fuelType === 'GASOLINA' ? entry.pricePerLiter : s.lastGasPrice,
+                  lastEtanolPrice: entry.fuelType === 'ETANOL' ? entry.pricePerLiter : s.lastEtanolPrice
+                } : s)
+              }));
+            }} refuels={state.refuels} /> : null;
+            case 'CUSTOS': return <Custos expenses={state.expenses} refuels={state.refuels} onAdd={(exp) => setState(p => ({ ...p, expenses: [...p.expenses, exp], currentDailyExpenses: exp.isWorkExpense ? [...p.currentDailyExpenses, exp] : p.currentDailyExpenses }))} isWorking={phase !== 'IDLE'} />;
+            case 'VEICULO': return state.user && ai ? <Veiculo user={state.user} maintenance={state.maintenance} onUpsert={(task) => setState(prev => ({ ...prev, maintenance: prev.maintenance.find(m => m.id === task.id) ? prev.maintenance.map(m => m.id === task.id ? task : m) : [...prev.maintenance, task] }))} onUpdateMaintCost={(cost) => setState(prev => ({...prev, user: prev.user ? {...prev.user, maintenanceCostPerKm: cost} : null}))} ai={ai} /> : null;
+            default: return null;
+          }
+        })()}
       </div>
       
       {state.user && view !== 'ONBOARDING' && view !== 'LANDING' && (
         <nav className="fixed bottom-4 left-4 right-4 max-w-[calc(448px-2rem)] mx-auto bg-white border border-black p-1.5 rounded-2xl flex justify-around items-center safe-area-bottom z-50 shadow-2xl transition-all">
-          <button onClick={() => setView('HOME')} className={`p-2 transition-all ${view === 'HOME' ? 'text-black scale-110' : 'text-zinc-300'}`}><LayoutDashboard size={22} /></button>
-          <button onClick={() => setView('POSTOS')} className={`p-2 transition-all ${view === 'POSTOS' ? 'text-black scale-110' : 'text-zinc-300'}`}><Fuel size={22} /></button>
-          <button onClick={() => setView('CUSTOS')} className={`p-2 transition-all ${view === 'CUSTOS' ? 'text-black scale-110' : 'text-zinc-300'}`}><Receipt size={22} /></button>
-          <button onClick={() => setView('VEICULO')} className={`p-2 transition-all ${view === 'VEICULO' ? 'text-black scale-110' : 'text-zinc-300'}`}><Car size={22} /></button>
-          <button onClick={() => setView('FINANCEIRO')} className={`p-2 transition-all ${view === 'FINANCEIRO' ? 'text-black scale-110' : 'text-zinc-300'}`}><Wallet size={22} /></button>
+          <button onClick={() => setView('HOME')} className={`p-2 transition-all ${view === 'HOME' ? 'text-black scale-110' : 'text-zinc-300'}`} aria-label="Home"><LayoutDashboard size={22} /></button>
+          <button onClick={() => setView('POSTOS')} className={`p-2 transition-all ${view === 'POSTOS' ? 'text-black scale-110' : 'text-zinc-300'}`} aria-label="Postos"><Fuel size={22} /></button>
+          <button onClick={() => setView('CUSTOS')} className={`p-2 transition-all ${view === 'CUSTOS' ? 'text-black scale-110' : 'text-zinc-300'}`} aria-label="Custos"><Receipt size={22} /></button>
+          <button onClick={() => setView('VEICULO')} className={`p-2 transition-all ${view === 'VEICULO' ? 'text-black scale-110' : 'text-zinc-300'}`} aria-label="Veículo"><Car size={22} /></button>
+          <button onClick={() => setView('FINANCEIRO')} className={`p-2 transition-all ${view === 'FINANCEIRO' ? 'text-black scale-110' : 'text-zinc-300'}`} aria-label="Financeiro"><Wallet size={22} /></button>
         </nav>
       )}
     </div>
