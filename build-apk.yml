@@ -13,25 +13,28 @@ jobs:
       with:
         node-version: '20'
     
-    - name: Create package.json
+    - name: Create package.json and install
       run: |
         cat > package.json << EOF
         {
           "name": "drivers-friend",
           "version": "1.0.0",
+          "main": "index.html",
           "scripts": {
+            "start": "echo 'Ready'",
             "build": "echo 'Build ready'"
           },
+          "dependencies": {
+            "@capacitor/core": "^6.2.0"
+          },
           "devDependencies": {
-            "@capacitor/core": "^6.0.0",
-            "@capacitor/android": "^6.0.0",
-            "@capacitor/cli": "^6.0.0"
+            "@capacitor/cli": "^6.2.0",
+            "@capacitor/android": "^6.2.0",
+            "@capacitor/ios": "^6.2.0"
           }
         }
         EOF
-    
-    - name: Install dependencies
-      run: npm ci
+        npm install
     
     - name: Add Capacitor Android
       run: npx cap add android
@@ -42,6 +45,7 @@ jobs:
     - name: Build APK
       run: |
         cd android
+        chmod +x gradlew
         ./gradlew assembleDebug
     
     - name: Upload APK
@@ -49,3 +53,4 @@ jobs:
       with:
         name: drivers-friend.apk
         path: android/app/build/outputs/apk/debug/app-debug.apk
+        retention-days: 7
