@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { UserProfile, TrackingPhase, Race, AppProfile, MaintenanceTask } from '../types';
 import { Play, UserPlus, Users, Flag, Gauge, Settings, Trash2, Clock, Navigation, ChevronDown, ChevronUp, Fuel, UserCircle, MapPin, Check, Info } from 'lucide-react';
@@ -26,34 +25,28 @@ const Home: React.FC<Props> = ({ user, phase, setPhase, kms, currentRaces = [], 
   
   const [newApp, setNewApp] = useState({ name: '', tax: '12', isFixed: false, fixedVal: '15.00' });
 
-  // Consolidação de Cálculos de Lucro e Meta
-  const dashboardStats = useMemo(() => {
+  // Consolidação Inteligente: Um único useMemo para todas as estatísticas principais
+  const { netTotal, progress, currentMaintRate, selectedApp } = useMemo(() => {
     const net = (currentRaces || []).reduce((acc, r) => acc + r.netProfit, 0);
-    const progress = Math.min(100, (net / (user.dailyGoal || 1)) * 100);
-    return { net, progress };
-  }, [currentRaces, user.dailyGoal]);
+    const prog = Math.min(100, (net / (user.dailyGoal || 1)) * 100);
+    
+    const maintRate = (!maintenance || maintenance.length === 0) 
+      ? 0.12 
+      : maintenance.reduce((acc, task) => acc + ((Number(task.lastCost) || 0) / (Number(task.interval) || 1)), 0);
 
-  // Taxa de manutenção consolidada
-  const currentMaintRate = useMemo(() => {
-    if (!maintenance || maintenance.length === 0) return 0.12;
-    return maintenance.reduce((acc, task) => acc + ((Number(task.lastCost) || 0) / (Number(task.interval) || 1)), 0);
-  }, [maintenance]);
+    const app = user.appProfiles.find(p => p.id === user.selectedAppProfileId);
 
-  const selectedApp = useMemo(() => 
-    user.appProfiles.find(p => p.id === user.selectedAppProfileId), 
-  [user.appProfiles, user.selectedAppProfileId]);
+    return { netTotal: net, progress: prog, currentMaintRate: maintRate, selectedApp: app };
+  }, [currentRaces, user.dailyGoal, maintenance, user.appProfiles, user.selectedAppProfileId]);
 
   // Efeito unificado para preenchimento de valor bruto fixo
   useEffect(() => {
-    if (showGross && selectedApp?.isFixedGross) {
-      setGrossInput(selectedApp.fixedGrossValue.toString());
-    } else if (showGross) {
-      setGrossInput('');
+    if (showGross) {
+      setGrossInput(selectedApp?.isFixedGross ? selectedApp.fixedGrossValue.toString() : '');
     }
   }, [showGross, selectedApp]);
 
   const formatTime = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
   const totalCurrentKm = kms.deslocamento + kms.passageiro;
 
   return (
@@ -74,17 +67,14 @@ const Home: React.FC<Props> = ({ user, phase, setPhase, kms, currentRaces = [], 
         <div className="flex justify-between items-start mb-4 relative z-10">
           <div>
             <p className="text-[10px] font-black uppercase text-slate-500 mb-1 tracking-widest">Lucro Livre (Limpo)</p>
-            <p className="text-4xl font-black italic text-white tracking-tighter leading-none">R$ {dashboardStats.net.toFixed(2)}</p>
+            <p className="text-4xl font-black italic text-white tracking-tighter leading-none">R$ {netTotal.toFixed(2)}</p>
           </div>
           <div className="text-right">
-             <p className="text-[10px] font-black text-blue-400 uppercase leading-none">{dashboardStats.progress.toFixed(0)}% Meta</p>
+             <p className="text-[10px] font-black text-blue-400 uppercase leading-none">{progress.toFixed(0)}% Meta</p>
           </div>
         </div>
         <div className="h-2 bg-slate-950 rounded-full overflow-hidden shadow-inner relative z-10">
-           <div className="h-full bg-blue-500 transition-all duration-1000 shadow-[0_0_20px_rgba(59,130,246,0.6)]" style={{width: `${dashboardStats.progress}%`}} />
-        </div>
-        <div className="absolute top-0 right-0 p-8 opacity-5">
-           <Navigation size={120} className="text-white" />
+           <div className="h-full bg-blue-500 transition-all duration-1000 shadow-[0_0_20px_rgba(59,130,246,0.6)]" style={{width: `${progress}%`}} />
         </div>
       </div>
 
@@ -127,7 +117,7 @@ const Home: React.FC<Props> = ({ user, phase, setPhase, kms, currentRaces = [], 
         )}
       </div>
 
-      {/* LISTA DE CORRIDAS OTIMIZADA */}
+      {/* LISTA DE CORRIDAS */}
       {currentRaces.length > 0 && (
         <div className="space-y-3 animate-up">
           <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest px-1">Ganhos Reais da Sessão</p>
@@ -219,7 +209,7 @@ const Home: React.FC<Props> = ({ user, phase, setPhase, kms, currentRaces = [], 
                     <Navigation size={14} className="text-blue-500"/> GPS: {totalCurrentKm.toFixed(2)} KM
                   </p>
                   {totalCurrentKm === 0 && (
-                    <p className="text-[7px] font-bold text-amber-500 uppercase italic">KM zerado não gera reserva mecânica.</p>
+                    <p className="text-[7px] font-bold text-amber-500 uppercase italic">Atenção: KM zerado impede reserva mecânica.</p>
                   )}
                </div>
             </div>

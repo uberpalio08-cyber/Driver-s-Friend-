@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { UserProfile, TripSession, AppState, AppView, TrackingPhase, Race, Expense, RefuelEntry, MaintenanceTask, AppProfile } from './types';
 import Landing from './components/Landing';
@@ -49,6 +48,13 @@ const App: React.FC = () => {
       setCurrentRaceTimes(p => ({ ...p, boarding: Date.now() }));
     }
     
+    // Configurações críticas para App Nativo: Alta Precisão e Sem Cache
+    const geoOptions = { 
+      enableHighAccuracy: true, 
+      timeout: 5000, 
+      maximumAge: 0 
+    };
+
     watchId.current = navigator.geolocation.watchPosition((pos) => {
       if (!startCoords) setStartCoords({lat: pos.coords.latitude, lng: pos.coords.longitude});
       if (lastPos.current) {
@@ -57,7 +63,7 @@ const App: React.FC = () => {
         const dLon = (pos.coords.longitude - lastPos.current.longitude) * Math.PI / 180;
         const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lastPos.current.latitude * Math.PI/180) * Math.cos(pos.coords.latitude * Math.PI/180) * Math.sin(dLon/2) * Math.sin(dLon/2);
         const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        if (dist > 0.002) { 
+        if (dist > 0.003) { // Reduzi sensibilidade para evitar "drift" parado
           setSessionKms(prev => {
             if (phase === 'ON_SHIFT') return { ...prev, particular: prev.particular + dist };
             if (phase === 'ACCEPTING') return { ...prev, deslocamento: prev.deslocamento + dist };
@@ -67,7 +73,8 @@ const App: React.FC = () => {
         }
       }
       lastPos.current = pos.coords;
-    }, null, { enableHighAccuracy: true });
+    }, (err) => console.warn('GPS Error:', err), geoOptions);
+    
     return () => { if (watchId.current) navigator.geolocation.clearWatch(watchId.current); };
   }, [phase]);
 
@@ -94,21 +101,16 @@ const App: React.FC = () => {
     const profile = state.user.appProfiles.find(p => p.id === state.user?.selectedAppProfileId);
     if (!profile) return;
 
-    // VALOR BRUTO (RECEBIDO)
     const safeGross = Math.max(0, Number(gross) || 0);
     const raceKm = sessionKms.deslocamento + sessionKms.passageiro;
     
-    // CALCULO DA TAXA DO APP (CORREÇÃO CRÍTICA)
-    // A taxa é SEMPRE uma porcentagem do valor bruto informado.
     const taxRate = (Number(profile.taxPercentage) || 0) / 100;
     const appTax = safeGross * taxRate;
     
-    // CUSTOS OPERACIONAIS
     const avgFuelPrice = state.refuels.length > 0 ? state.refuels[state.refuels.length-1].pricePerLiter : 5.85;
     const fuelCost = (raceKm / (state.user.calculatedAvgConsumption || 10)) * avgFuelPrice;
     const maintRes = raceKm * maintCostPerKm;
     
-    // RESERVA PESSOAL (SALÁRIO)
     const dailyGoal = Number(state.user.dailyGoal) || 1;
     const dailyExpenses = (state.user.desiredSalary + state.user.personalFixedCosts) / (state.user.workingDaysPerMonth || 22);
     const personalRes = (safeGross / dailyGoal) * dailyExpenses;
