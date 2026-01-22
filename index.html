@@ -17,8 +17,8 @@
         * {
             -webkit-tap-highlight-color: transparent;
             -webkit-touch-callout: none;
-            -webkit-user-select: none;
             user-select: none;
+            -webkit-user-select: none;
             outline: none;
         }
         html, body {
@@ -28,7 +28,7 @@
             position: fixed;
             background: #020617;
             margin: 0; padding: 0;
-            overscroll-behavior: none; /* Bloqueia o pull-to-refresh */
+            overscroll-behavior: none;
         }
         #root { 
             height: 100vh;
@@ -41,16 +41,26 @@
             padding-top: var(--sat);
             padding-bottom: var(--sab);
         }
-        input, select {
+        input, select, textarea {
             -webkit-user-select: text !important;
             user-select: text !important;
-            appearance: none;
+            color: #ffffff !important; /* Força texto branco */
+            background-color: #0f172a !important; /* Fundo escuro contrastante */
+            border: 1px solid #1e293b !important;
+            border-radius: 16px !important;
+            padding: 14px !important;
+            font-size: 16px !important;
+        }
+        input::placeholder {
+            color: #475569 !important;
         }
         .safe-scroll {
             padding-bottom: calc(140px + var(--sab));
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
         }
+        /* Esconde a barra de rolagem mas mantém funcionalidade */
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
     </style>
 <script type="importmap">
 {
