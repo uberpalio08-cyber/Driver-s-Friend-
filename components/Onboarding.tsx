@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { UserProfile } from '../types';
+import { UserProfile, Type } from '../types';
 import { User, Car, Target, ArrowRight, Loader2, Sparkles, Zap } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 
@@ -21,14 +20,32 @@ const Onboarding: React.FC<Props> = ({ ai, onComplete }) => {
     if (!data.brand || !data.model) return alert("Preencha Marca e Modelo.");
     setLoading(true);
     try {
+      // Uso de Schema rigoroso para garantir que a IA não quebre o JSON
       const resp = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `JSON: Capacidade exata do tanque de combustível em litros para o veículo ${data.brand} ${data.model} ${data.year}. FORMATO: {"liters": number}`,
-        config: { responseMimeType: "application/json" }
+        contents: `Qual a capacidade exata do tanque em litros para o veículo ${data.brand} ${data.model} ${data.year}?`,
+        config: { 
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              liters: { type: Type.NUMBER, description: "Capacidade do tanque em litros" }
+            },
+            required: ["liters"]
+          }
+        }
       });
-      const res = JSON.parse(resp.text);
-      setData(p => ({ ...p, tank: res.liters?.toString() || '' }));
-    } catch (e) { alert("IA indisponível. Preencha manualmente."); }
+      
+      const cleanJson = JSON.parse(resp.text || '{}');
+      if (cleanJson.liters) {
+        setData(p => ({ ...p, tank: cleanJson.liters.toString() }));
+      } else {
+        throw new Error("Resposta inválida");
+      }
+    } catch (e) { 
+      console.error(e);
+      alert("A IA está processando muitas requisições ou a chave é inválida. Por favor, preencha manualmente."); 
+    }
     finally { setLoading(false); }
   };
 
@@ -36,21 +53,20 @@ const Onboarding: React.FC<Props> = ({ ai, onComplete }) => {
     const s = parseFloat(data.salary) || 0;
     const c = parseFloat(data.costs) || 0;
     const d = parseFloat(data.days) || 1;
-    // Sugestão de Meta Bruta Diária: Meta Líquida / 0.55 (considerando aprox 45% de gastos operacionais médios)
     return Math.round(((s + c) / d) / 0.55);
   };
 
   const next = () => { if (step < 3) setStep(step + 1); else finish(); };
   const finish = () => {
     onComplete({
-      name: data.name, currentFuelLevel: 0, lastOdometer: 0, calculatedAvgConsumption: 10, maintenanceCostPerKm: 0.15,
+      name: data.name, currentFuelLevel: 0, lastOdometer: 0, calculatedAvgConsumption: 10,
       car: { brand: data.brand, model: data.model, year: data.year, power: data.power, tankCapacity: parseFloat(data.tank) || 50 },
       desiredSalary: parseFloat(data.salary), personalFixedCosts: parseFloat(data.costs), workingDaysPerMonth: parseInt(data.days),
       dailyGoal: calculateDailyGoal(), appProfiles: [], selectedAppProfileId: '', stationProfiles: []
     });
   };
 
-  const inputStyle = "w-full bg-slate-900 border border-slate-800 rounded-2xl px-4 py-3.5 text-white font-bold text-sm focus:border-blue-500 outline-none transition-all";
+  const inputStyle = "w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-4 text-white font-bold text-base focus:border-blue-500 outline-none transition-all";
   const labelStyle = "text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block ml-1";
 
   return (
@@ -60,7 +76,7 @@ const Onboarding: React.FC<Props> = ({ ai, onComplete }) => {
           <div className="w-16 h-16 bg-blue-600 rounded-2xl mx-auto flex items-center justify-center text-white shadow-xl border-b-4 border-blue-800">
             {step === 1 ? <User size={30} /> : step === 2 ? <Car size={30} /> : <Target size={30} />}
           </div>
-          <h1 className="text-2xl font-black italic uppercase tracking-tighter">
+          <h1 className="text-2xl font-black italic uppercase tracking-tighter text-white">
             {step === 1 ? 'Como se chama?' : step === 2 ? 'Seu Veículo' : 'Sua Meta Diária'}
           </h1>
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest opacity-60">Passo {step} de 3</p>
@@ -77,8 +93,8 @@ const Onboarding: React.FC<Props> = ({ ai, onComplete }) => {
           {step === 2 && (
             <div className="space-y-4 animate-up">
               <div className="grid grid-cols-2 gap-3">
-                <div><label className={labelStyle}>Marca</label><input className={inputStyle} value={data.brand} onChange={e => setData({...data, brand: e.target.value})} placeholder="Toyota" /></div>
-                <div><label className={labelStyle}>Modelo</label><input className={inputStyle} value={data.model} onChange={e => setData({...data, model: e.target.value})} placeholder="Corolla" /></div>
+                <div><label className={labelStyle}>Marca</label><input className={inputStyle} value={data.brand} onChange={e => setData({...data, brand: e.target.value})} placeholder="Ex: Fiat" /></div>
+                <div><label className={labelStyle}>Modelo</label><input className={inputStyle} value={data.model} onChange={e => setData({...data, model: e.target.value})} placeholder="Ex: Argo" /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className={labelStyle}>Ano</label><input className={inputStyle} value={data.year} onChange={e => setData({...data, year: e.target.value})} placeholder="2024" /></div>
@@ -86,6 +102,7 @@ const Onboarding: React.FC<Props> = ({ ai, onComplete }) => {
                   <label className={labelStyle}>Motor</label>
                   <select className={inputStyle} value={data.power} onChange={e => setData({...data, power: e.target.value})}>
                     <option value="1.0">1.0</option>
+                    <option value="1.3">1.3</option>
                     <option value="1.6">1.6</option>
                     <option value="2.0">2.0</option>
                   </select>
@@ -94,9 +111,9 @@ const Onboarding: React.FC<Props> = ({ ai, onComplete }) => {
               <div>
                 <label className={labelStyle}>Tanque (Litros)</label>
                 <div className="relative">
-                  <input className={inputStyle} type="number" value={data.tank} onChange={e => setData({...data, tank: e.target.value})} placeholder="Capacidade em L" />
-                  <button onClick={fetchTankCapacity} disabled={loading} className="absolute right-2 top-2 bottom-2 bg-blue-600/20 text-blue-400 px-3 rounded-xl flex items-center gap-1.5 text-[9px] font-black uppercase border border-blue-500/10">
-                    {loading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} IA Tank
+                  <input className={inputStyle} type="number" value={data.tank} onChange={e => setData({...data, tank: e.target.value})} placeholder="00" />
+                  <button onClick={fetchTankCapacity} disabled={loading} className="absolute right-2 top-2 bottom-2 bg-blue-600 text-white px-4 rounded-xl flex items-center gap-1.5 text-[9px] font-black uppercase shadow-lg disabled:opacity-50">
+                    {loading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} CONSULTAR IA
                   </button>
                 </div>
               </div>
@@ -114,16 +131,16 @@ const Onboarding: React.FC<Props> = ({ ai, onComplete }) => {
               <div className="bento-card p-5 bg-blue-600/5 border-blue-500/20">
                 <div className="flex items-center gap-3 mb-2">
                   <Zap size={16} className="text-blue-500" />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">Meta Sugerida</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">Faturamento Diário Sugerido</span>
                 </div>
                 <p className="text-3xl font-black italic text-white tracking-tighter leading-none">R$ {calculateDailyGoal()}</p>
-                <p className="text-[8px] font-bold text-slate-500 uppercase mt-2">Faturamento bruto diário para cobrir tudo.</p>
+                <p className="text-[8px] font-bold text-slate-500 uppercase mt-2">Valor bruto necessário para bater as metas líquidas.</p>
               </div>
             </div>
           )}
 
-          <button onClick={next} className="w-full bg-blue-600 text-white font-black py-4.5 rounded-2xl flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all border-b-4 border-blue-800">
-            {step < 3 ? 'Avançar' : 'Finalizar Cadastro'} <ArrowRight size={20} />
+          <button onClick={next} className="w-full bg-blue-600 text-white font-black py-5 rounded-2xl flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all border-b-4 border-blue-800">
+            {step < 3 ? 'PRÓXIMO PASSO' : 'FINALIZAR E ENTRAR'} <ArrowRight size={20} />
           </button>
         </div>
       </div>

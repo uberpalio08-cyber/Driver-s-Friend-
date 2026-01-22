@@ -1,14 +1,24 @@
-
 export type AppView = 'LANDING' | 'ONBOARDING' | 'HOME' | 'FINANCEIRO' | 'POSTOS' | 'CUSTOS' | 'VEICULO';
 export type TrackingPhase = 'IDLE' | 'ON_SHIFT' | 'ACCEPTING' | 'BOARDING';
 export type FuelType = 'GASOLINA' | 'ETANOL';
 export type ExpenseCategory = 'ALIMENTAÇÃO' | 'ÁGUA' | 'LUZ' | 'TELEFONE' | 'COMBUSTÍVEL' | 'MANUTENÇÃO' | 'OUTROS';
 
+// Re-exportando Type para uso nos componentes que lidam com IA
+export enum Type {
+  STRING = 'STRING',
+  NUMBER = 'NUMBER',
+  INTEGER = 'INTEGER',
+  BOOLEAN = 'BOOLEAN',
+  ARRAY = 'ARRAY',
+  OBJECT = 'OBJECT',
+  NULL = 'NULL',
+}
+
 export interface CarInfo {
   brand: string;
   model: string;
   year: string;
-  power: string; // 1.0, 1.6, 2.0
+  power: string;
   tankCapacity: number;
 }
 
@@ -24,9 +34,9 @@ export interface MaintenanceTask {
 export interface AppProfile {
   id: string;
   name: string;
-  taxPercentage: number;     // Porcentagem que o App retira (ex: 12%)
-  isFixedGross: boolean;     // Se a corrida tem um valor bruto fixo (ex: entregas)
-  fixedGrossValue: number;   // O valor bruto fixo da corrida
+  taxPercentage: number;
+  isFixedGross: boolean;
+  fixedGrossValue: number;
 }
 
 export interface Expense {
