@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Simple WebView APK
 
 on: [push, workflow_dispatch]
 
@@ -8,42 +8,16 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Setup Node
-      uses: actions/setup-node@v4
+    - name: Generate APK from website
+      uses: AppGyver/webview-apk-action@v1
       with:
-        node-version: '20'
-    
-    - name: Install Capacitor
-      run: npm init -y && npm i @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
-    
-    - name: Copy index.html to dist
-      run: mkdir -p dist && cp index.html dist/
-    
-    - name: Capacitor config
-      run: |
-        cat > capacitor.config.ts << EOF
-        import { CapacitorConfig } from '@capacitor/cli';
-        const config: CapacitorConfig = {
-          appId: 'com.driver.friend',
-          appName: 'Driver Friend',
-          webDir: 'dist'
-        };
-        export default config;
-        EOF
-    
-    - name: Cap init/add/sync
-      run: |
-        npx cap init com.driver.friend Driver Friend ./dist
-        npx cap add android
-        npx cap sync
-    
-    - name: Build APK
-      run: |
-        cd android
-        ./gradlew assembleDebug
+        url: 'https://djrvb.netlify.app/'
+        app-name: 'Driver Friend'
+        app-package: 'com.driver.friend'
+        icon-base64: ''
     
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: app.apk
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        name: driver-friend.apk
+        path: ./*.apk
