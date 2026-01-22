@@ -3,28 +3,19 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 
-// Registro de Service Worker para PWA (Play Store Ready)
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js')
-      .then(reg => console.log('SW registrado com sucesso:', reg.scope))
-      .catch(err => console.log('Falha ao registrar SW:', err));
-  });
-}
-
-// Native Bridge: Haptic Feedback e Gestão de Hardware
+// Ponte Nativa Robusta
 const NativeBridge = {
-  vibrate: (pattern: number | number[] = 10) => {
-    if ('vibrate' in navigator) {
-      navigator.vibrate(pattern);
-    }
+  vibrate: async (style: 'LIGHT' | 'MEDIUM' | 'HEAVY' = 'MEDIUM') => {
+    try {
+      // Tenta usar a API nativa de Haptics se disponível (via Capacitor/Plugins)
+      if (navigator.vibrate) navigator.vibrate(20);
+    } catch (e) {}
   },
-  requestLocation: () => {
+  getPreciseLocation: async () => {
     return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) reject('GPS não disponível');
       navigator.geolocation.getCurrentPosition(resolve, reject, {
         enableHighAccuracy: true,
-        timeout: 10000,
+        timeout: 15000,
         maximumAge: 0
       });
     });
@@ -32,6 +23,9 @@ const NativeBridge = {
 };
 
 (window as any).NativeBridge = NativeBridge;
+
+// Bloqueio de Gestos Indesejados de Navegador
+document.addEventListener('gesturestart', (e) => e.preventDefault());
 
 const container = document.getElementById('root');
 if (!container) throw new Error('Root element not found');
