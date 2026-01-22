@@ -8,46 +8,42 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Setup Node.js
+    - name: Setup Node
       uses: actions/setup-node@v4
       with:
         node-version: '20'
     
-    - name: Setup Capacitor
-      run: |
-        npm init -y
-        npm install @capacitor/core@^6.2.0 @capacitor/cli@^6.2.0 @capacitor/android@^6.2.0 @capacitor/ios@^6.2.0
+    - name: Install Capacitor
+      run: npm init -y && npm i @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
     
-    - name: Create capacitor.config.ts
+    - name: Copy index.html to dist
+      run: mkdir -p dist && cp index.html dist/
+    
+    - name: Capacitor config
       run: |
         cat > capacitor.config.ts << EOF
         import { CapacitorConfig } from '@capacitor/cli';
         const config: CapacitorConfig = {
-          appId: 'com.uberpalio.driversfriend',
-          appName: 'Driver\\'s Friend',
-          webDir: 'dist',
-          bundledWebRuntime: false
+          appId: 'com.driver.friend',
+          appName: 'Driver Friend',
+          webDir: 'dist'
         };
         export default config;
         EOF
     
-    - name: Init Capacitor
-      run: npx cap init
-    
-    - name: Add Android
-      run: npx cap add android
-    
-    - name: Sync
-      run: npx cap sync
+    - name: Cap init/add/sync
+      run: |
+        npx cap init com.driver.friend Driver Friend ./dist
+        npx cap add android
+        npx cap sync
     
     - name: Build APK
       run: |
         cd android
-        chmod +x gradlew
         ./gradlew assembleDebug
     
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: drivers-friend.apk
+        name: app.apk
         path: android/app/build/outputs/apk/debug/app-debug.apk
