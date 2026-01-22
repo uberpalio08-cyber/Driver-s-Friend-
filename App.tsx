@@ -26,10 +26,15 @@ const App: React.FC = () => {
   const lastPos = useRef<GeolocationCoordinates | null>(null);
   const watchId = useRef<number | null>(null);
 
-  // Inicialização segura da IA
+  // Inicialização segura da IA - Previne crash se a KEY não for injetada corretamente no build do APK
   const ai = useMemo(() => {
+    const key = process.env.API_KEY;
+    if (!key || key === 'undefined') {
+      console.warn("API_KEY não detectada. Funções de IA estarão limitadas.");
+      return null;
+    }
     try {
-      return new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+      return new GoogleGenAI({ apiKey: key });
     } catch (e) {
       console.error("Erro ao inicializar IA:", e);
       return null;
@@ -45,12 +50,11 @@ const App: React.FC = () => {
     }, 0);
   }, [state.maintenance]);
 
-  // Função para forçar o pedido de permissão nativo
   const requestPermissions = () => {
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => console.log("Permissão concedida:", pos.coords),
-        (err) => console.warn("Permissão negada ou erro:", err),
+        (pos) => console.log("GPS Ativo"),
+        (err) => console.warn("GPS Erro:", err),
         { enableHighAccuracy: true }
       );
     }
@@ -62,19 +66,7 @@ const App: React.FC = () => {
       return;
     }
 
-    if (phase === 'ACCEPTING' && currentRaceTimes.start === 0) {
-      setCurrentRaceTimes(p => ({ ...p, start: Date.now() }));
-    }
-    if (phase === 'BOARDING' && currentRaceTimes.boarding === 0) {
-      setCurrentRaceTimes(p => ({ ...p, boarding: Date.now() }));
-    }
-    
-    const geoOptions = { 
-      enableHighAccuracy: true, 
-      timeout: 10000, 
-      maximumAge: 0 
-    };
-
+    const geoOptions = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
     watchId.current = navigator.geolocation.watchPosition((pos) => {
       if (!startCoords) setStartCoords({lat: pos.coords.latitude, lng: pos.coords.longitude});
       if (lastPos.current) {
@@ -93,7 +85,7 @@ const App: React.FC = () => {
         }
       }
       lastPos.current = pos.coords;
-    }, (err) => console.warn('GPS Error:', err), geoOptions);
+    }, null, geoOptions);
     
     return () => { if (watchId.current) navigator.geolocation.clearWatch(watchId.current); };
   }, [phase]);
@@ -118,50 +110,26 @@ const App: React.FC = () => {
     if (!state.user) return;
     const profile = state.user.appProfiles.find(p => p.id === state.user?.selectedAppProfileId);
     if (!profile) return;
-
     const safeGross = Math.max(0, Number(gross) || 0);
     const raceKm = sessionKms.deslocamento + sessionKms.passageiro;
-    
-    const taxRate = (Number(profile.taxPercentage) || 0) / 100;
-    const appTax = safeGross * taxRate;
-    
-    const avgFuelPrice = state.refuels.length > 0 ? state.refuels[state.refuels.length-1].pricePerLiter : 5.85;
-    const fuelCost = (raceKm / (state.user.calculatedAvgConsumption || 10)) * avgFuelPrice;
+    const appTax = safeGross * ((Number(profile.taxPercentage) || 0) / 100);
+    const fuelCost = (raceKm / (state.user.calculatedAvgConsumption || 10)) * (state.refuels.length > 0 ? state.refuels[state.refuels.length-1].pricePerLiter : 5.85);
     const maintRes = raceKm * maintCostPerKm;
-    
-    const dailyGoal = Number(state.user.dailyGoal) || 1;
-    const dailyExpenses = (state.user.desiredSalary + state.user.personalFixedCosts) / (state.user.workingDaysPerMonth || 22);
-    const personalRes = (safeGross / dailyGoal) * dailyExpenses;
-
+    const personalRes = (safeGross / (Number(state.user.dailyGoal) || 1)) * ((state.user.desiredSalary + state.user.personalFixedCosts) / (state.user.workingDaysPerMonth || 22));
     const netProfit = safeGross - appTax - fuelCost - maintRes - personalRes;
-
-    const newRace: Race = {
-      id: Date.now().toString(), date: Date.now(), appName: profile.name,
-      startTime: currentRaceTimes.start || Date.now(), boardingTime: currentRaceTimes.boarding || Date.now(), endTime: Date.now(),
-      kmDeslocamento: sessionKms.deslocamento, kmPassageiro: sessionKms.passageiro,
-      grossEarnings: safeGross, appTax, fuelCost, maintReserve: maintRes, personalReserve: personalRes,
-      netProfit: netProfit
-    };
 
     setState(prev => ({
       ...prev,
-      currentRaces: [...prev.currentRaces, newRace],
+      currentRaces: [...prev.currentRaces, {
+        id: Date.now().toString(), date: Date.now(), appName: profile.name,
+        startTime: currentRaceTimes.start || Date.now(), boardingTime: currentRaceTimes.boarding || Date.now(), endTime: Date.now(),
+        kmDeslocamento: sessionKms.deslocamento, kmPassageiro: sessionKms.passageiro,
+        grossEarnings: safeGross, appTax, fuelCost, maintReserve: maintRes, personalReserve: personalRes, netProfit
+      }],
       user: prev.user ? { ...prev.user, lastOdometer: prev.user.lastOdometer + raceKm } : null
     }));
-    
     setSessionKms({ particular: 0, deslocamento: 0, passageiro: 0 });
     setPhase('ON_SHIFT');
-    setStartCoords(null);
-  };
-
-  const handleFinishShift = (odo: number) => {
-    if (!state.user) return;
-    const totalGross = state.currentRaces.reduce((acc, r) => acc + r.grossEarnings, 0);
-    const totalNet = state.currentRaces.reduce((acc, r) => acc + r.netProfit, 0);
-    const session: TripSession = { id: Date.now().toString(), date: Date.now(), startOdometer: state.user.lastOdometer, endOdometer: odo, kmParticular: sessionKms.particular, races: [...state.currentRaces], totalGross, totalNet };
-    setState(prev => ({ ...prev, sessions: [...prev.sessions, session], currentRaces: [], user: prev.user ? { ...prev.user, lastOdometer: odo } : null }));
-    setSessionKms({ particular: 0, deslocamento: 0, passageiro: 0 });
-    setPhase('IDLE');
   };
 
   if (!state.isLoaded) return <div className="h-screen bg-slate-950 flex items-center justify-center text-white font-black italic">DRIVER'S FRIEND</div>;
@@ -169,19 +137,14 @@ const App: React.FC = () => {
   return (
     <div id="root" className="flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden">
       <div className="flex-1 overflow-y-auto px-4 safe-scroll pt-2">
-        {view === 'LANDING' && <Landing 
-          user={state.user} 
-          onStart={() => { requestPermissions(); setView('ONBOARDING'); }} 
-          onSelect={() => { requestPermissions(); setView('HOME'); }} 
-          onNewRegistration={() => { localStorage.clear(); window.location.reload(); }} 
-        />}
-        {view === 'ONBOARDING' && ai && <Onboarding ai={ai} onComplete={(u) => { setState(p => ({ ...p, user: u })); setView('HOME'); }} />}
-        {view === 'HOME' && state.user && <Home 
-          user={state.user} phase={phase} setPhase={setPhase} kms={sessionKms} 
-          currentRaces={state.currentRaces} maintenance={state.maintenance} 
-          onFinishRace={handleFinishRace} onRemoveRace={(id) => setState(p => ({ ...p, currentRaces: p.currentRaces.filter(r => r.id !== id) }))} 
-          onFinishShift={handleFinishShift} onUpdateUser={(u) => setState(p => ({ ...p, user: u }))} 
-        />}
+        {view === 'LANDING' && <Landing user={state.user} onStart={() => { requestPermissions(); setView('ONBOARDING'); }} onSelect={() => { requestPermissions(); setView('HOME'); }} onNewRegistration={() => { localStorage.clear(); window.location.reload(); }} />}
+        {view === 'ONBOARDING' && <Onboarding ai={ai} onComplete={(u) => { setState(p => ({ ...p, user: u })); setView('HOME'); }} />}
+        {view === 'HOME' && state.user && <Home user={state.user} phase={phase} setPhase={setPhase} kms={sessionKms} currentRaces={state.currentRaces} maintenance={state.maintenance} onFinishRace={handleFinishRace} onRemoveRace={(id) => setState(p => ({ ...p, currentRaces: p.currentRaces.filter(r => r.id !== id) }))} onFinishShift={(odo) => { 
+          const totalGross = state.currentRaces.reduce((acc, r) => acc + r.grossEarnings, 0);
+          const totalNet = state.currentRaces.reduce((acc, r) => acc + r.netProfit, 0);
+          setState(p => ({ ...p, sessions: [...p.sessions, { id: Date.now().toString(), date: Date.now(), startOdometer: p.user!.lastOdometer, endOdometer: odo, kmParticular: sessionKms.particular, races: [...p.currentRaces], totalGross, totalNet }], currentRaces: [], user: p.user ? { ...p.user, lastOdometer: odo } : null }));
+          setPhase('IDLE');
+        }} onUpdateUser={(u) => setState(p => ({ ...p, user: u }))} />}
         {view === 'FINANCEIRO' && state.user && <Financeiro user={state.user} sessions={state.sessions} expenses={state.expenses} refuels={state.refuels} currentRaces={state.currentRaces} />}
         {view === 'POSTOS' && state.user && <Postos user={state.user} refuels={state.refuels} onRefuel={(r) => setState(p => ({ ...p, refuels: [...p.refuels, r] }))} />}
         {view === 'CUSTOS' && <Custos expenses={state.expenses} refuels={state.refuels} onAdd={(e) => setState(p => ({ ...p, expenses: [...p.expenses, e] }))} onRemoveExpense={(id) => setState(p => ({ ...p, expenses: p.expenses.filter(x => x.id !== id) }))} onRemoveRefuel={(id) => setState(p => ({ ...p, refuels: p.refuels.filter(x => x.id !== id) }))} isWorking={phase !== 'IDLE'} />}

@@ -4,7 +4,7 @@ import { User, Car, Target, ArrowRight, Loader2, Sparkles, Zap } from 'lucide-re
 import { GoogleGenAI } from "@google/genai";
 
 interface Props {
-  ai: GoogleGenAI;
+  ai: GoogleGenAI | null;
   onComplete: (u: UserProfile) => void;
 }
 
@@ -17,10 +17,10 @@ const Onboarding: React.FC<Props> = ({ ai, onComplete }) => {
   });
 
   const fetchTankCapacity = async () => {
+    if (!ai) return alert("IA temporariamente indisponível no modo offline do APK. Preencha manualmente o tamanho do tanque.");
     if (!data.brand || !data.model) return alert("Preencha Marca e Modelo.");
     setLoading(true);
     try {
-      // Uso de Schema rigoroso para garantir que a IA não quebre o JSON
       const resp = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Qual a capacidade exata do tanque em litros para o veículo ${data.brand} ${data.model} ${data.year}?`,
@@ -44,7 +44,7 @@ const Onboarding: React.FC<Props> = ({ ai, onComplete }) => {
       }
     } catch (e) { 
       console.error(e);
-      alert("A IA está processando muitas requisições ou a chave é inválida. Por favor, preencha manualmente."); 
+      alert("Não foi possível consultar a IA agora. Por favor, preencha o valor do tanque manualmente."); 
     }
     finally { setLoading(false); }
   };
@@ -61,7 +61,7 @@ const Onboarding: React.FC<Props> = ({ ai, onComplete }) => {
     onComplete({
       name: data.name, currentFuelLevel: 0, lastOdometer: 0, calculatedAvgConsumption: 10,
       car: { brand: data.brand, model: data.model, year: data.year, power: data.power, tankCapacity: parseFloat(data.tank) || 50 },
-      desiredSalary: parseFloat(data.salary), personalFixedCosts: parseFloat(data.costs), workingDaysPerMonth: parseInt(data.days),
+      desiredSalary: parseFloat(data.salary) || 4000, personalFixedCosts: parseFloat(data.costs) || 1500, workingDaysPerMonth: parseInt(data.days) || 22,
       dailyGoal: calculateDailyGoal(), appProfiles: [], selectedAppProfileId: '', stationProfiles: []
     });
   };
