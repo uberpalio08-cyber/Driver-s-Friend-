@@ -1,15 +1,26 @@
 
-const CACHE_NAME = 'driver-elite-v30';
+const CACHE_NAME = 'drivers-friend-v16';
 const ASSETS = [
-  '/',
-  '/index.html',
-  '/metadata.json'
+  './',
+  './index.html',
+  './index.tsx',
+  './metadata.json',
+  'https://cdn.tailwindcss.com',
+  'https://esm.sh/lucide-react@0.469.0'
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
+  e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)));
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))));
+  self.clients.claim();
 });
 
 self.addEventListener('fetch', (e) => {
-  e.respondWith(caches.match(e.request).then(res => res || fetch(e.request)));
+  e.respondWith(
+    caches.match(e.request).then(res => res || fetch(e.request))
+  );
 });

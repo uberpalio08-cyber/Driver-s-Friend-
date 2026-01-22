@@ -1,9 +1,9 @@
+
 export type AppView = 'LANDING' | 'ONBOARDING' | 'HOME' | 'FINANCEIRO' | 'POSTOS' | 'CUSTOS' | 'VEICULO';
-export type TrackingPhase = 'IDLE' | 'ON_SHIFT' | 'ACCEPTING' | 'BOARDING';
+export type TrackingPhase = 'IDLE' | 'ON_SHIFT' | 'DESLOCAMENTO' | 'PASSAGEIRO';
 export type FuelType = 'GASOLINA' | 'ETANOL';
 export type ExpenseCategory = 'ALIMENTAÇÃO' | 'ÁGUA' | 'LUZ' | 'TELEFONE' | 'COMBUSTÍVEL' | 'MANUTENÇÃO' | 'OUTROS';
 
-// Re-exportando Type para uso nos componentes que lidam com IA
 export enum Type {
   STRING = 'STRING',
   NUMBER = 'NUMBER',
@@ -34,9 +34,9 @@ export interface MaintenanceTask {
 export interface AppProfile {
   id: string;
   name: string;
-  taxPercentage: number;
-  isFixedGross: boolean;
-  fixedGrossValue: number;
+  taxValue: number; // Porcentagem que o app cobra (ex: 25)
+  isFixedTax: boolean; // Se o valor da corrida é fixo (ex: Uber Moto / Entrega)
+  defaultGross: number; // Valor da corrida fixa se isFixedTax for true
 }
 
 export interface Expense {
@@ -53,23 +53,17 @@ export interface Race {
   date: number;
   appName: string;
   startTime: number;    
-  boardingTime: number; 
   endTime: number;      
-  kmDeslocamento: number;
-  kmPassageiro: number;
   grossEarnings: number;
   appTax: number;
   fuelCost: number;
   maintReserve: number;
   personalReserve: number;
   netProfit: number;
-}
-
-export interface StationProfile {
-  id: string;
-  name: string;
-  lastPrice: number;
-  lastFuelType: FuelType;
+  // KMs precisos do Odômetro
+  emptyKm: number; // KM rodado aguardando
+  displacementKm: number; // KM até o passageiro
+  raceKm: number; // KM com passageiro
 }
 
 export interface RefuelEntry {
@@ -81,6 +75,14 @@ export interface RefuelEntry {
   amountMoney: number;
   liters: number;
   odometerAtRefuel: number;
+  isFullTank: boolean;
+}
+
+export interface StationProfile {
+  id: string;
+  name: string;
+  lastPrice: number;
+  lastFuelType: FuelType;
 }
 
 export interface UserProfile {
@@ -103,7 +105,6 @@ export interface TripSession {
   date: number;
   startOdometer: number;
   endOdometer: number;
-  kmParticular: number;
   races: Race[];
   totalGross: number;
   totalNet: number;

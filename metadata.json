@@ -1,104 +1,37 @@
 {
-  "id": "com.driversfriend.v1",
-  "name": "Driver's Friend: Inteligência Financeira",
+  "id": "com.driversfriend.pro",
+  "name": "Driver's Friend Pro",
   "short_name": "DriversFriend",
-  "description": "Gestão profissional completa de custos, manutenção e lucros reais para motoristas de aplicativo.",
+  "description": "Gestão Inteligente para Motoristas Profissionais",
   "lang": "pt-BR",
-  "dir": "ltr",
+  "start_url": "./index.html",
   "theme_color": "#020617",
   "background_color": "#020617",
-  "display": "fullscreen",
-  "display_override": [
-    "fullscreen",
-    "standalone"
-  ],
+  "display": "standalone",
   "orientation": "portrait",
-  "scope": "/",
-  "start_url": "/?utm_source=native_apk",
-  "categories": [
-    "finance",
-    "productivity",
-    "utilities",
-    "business"
-  ],
-  "iarc_rating_id": "123456",
-  "related_applications": [],
-  "prefer_related_applications": false,
   "icons": [
-    {
-      "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
-      "sizes": "72x72",
-      "type": "image/png"
-    },
-    {
-      "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
-      "sizes": "96x96",
-      "type": "image/png"
-    },
-    {
-      "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
-      "sizes": "128x128",
-      "type": "image/png"
-    },
-    {
-      "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
-      "sizes": "144x144",
-      "type": "image/png"
-    },
     {
       "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "https://images.unsplash.com/photo-1617195920950-1145bf9a9c72?q=80&w=1080&h=1920&auto=format&fit=crop",
-      "sizes": "1080x1920",
-      "type": "image/jpeg",
-      "form_factor": "narrow",
-      "label": "Painel de Controle Principal"
-    },
-    {
-      "src": "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?q=80&w=1920&h=1080&auto=format&fit=crop",
-      "sizes": "1920x1080",
-      "type": "image/jpeg",
-      "form_factor": "wide",
-      "label": "Gestão de Lucros"
-    }
-  ],
-  "shortcuts": [
-    {
-      "name": "Iniciar Corrida",
-      "url": "/?action=start",
-      "icons": [
-        {
-          "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
-          "sizes": "192x192"
-        }
-      ]
-    },
-    {
-      "name": "Ver Financeiro",
-      "url": "/financeiro",
-      "icons": [
-        {
-          "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
-          "sizes": "192x192"
-        }
-      ]
+      "purpose": "any"
     }
   ],
   "requestFramePermissions": [
-    "geolocation",
     "camera",
-    "microphone"
-  ]
+    "microphone",
+    "geolocation"
+  ],
+  "categories": [
+    "finance",
+    "productivity"
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
 }

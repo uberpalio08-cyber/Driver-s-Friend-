@@ -1,43 +1,63 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <!-- Forçar Modo Nativo Fullscreen -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#020617">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="Driver's Friend">
-    <meta name="theme-color" content="#020617">
-    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="Driver's Friend">
+
     <link rel="manifest" href="./metadata.json">
-    <title>Driver's Friend</title>
+    <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2555/2555013.png">
+    
+    <title>Driver's Friend Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
-        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; outline: none !important; }
+        
         html, body {
             overflow: hidden; width: 100%; height: 100%; position: fixed;
             background: #020617; margin: 0; padding: 0;
-            overscroll-behavior-y: none; color: #ffffff;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overscroll-behavior: none; touch-action: pan-x pan-y;
+            user-select: none; -webkit-user-select: none;
+            color: white; font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
+
         #root { 
             height: 100vh; width: 100vw; position: fixed; top: 0; left: 0;
             background: #020617; padding-top: var(--sat); padding-bottom: var(--sab);
         }
+
+        /* CORREÇÃO DE CONTRASTE GLOBAL - FUNDO ESCURO, TEXTO BRANCO */
         input, select, textarea {
-            -webkit-user-select: text !important;
-            background-color: #0f172a !important;
+            background-color: #0f172a !important; 
             color: #ffffff !important;
-            border: 1px solid #334155 !important;
-            border-radius: 12px !important;
-            padding: 12px !important;
+            border: 2px solid #1e293b !important;
+            border-radius: 12px;
+            padding: 12px;
+            font-weight: 600;
         }
-        .safe-scroll { padding-bottom: 120px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-        ::-webkit-scrollbar { width: 0px; }
-        .bubble-glow { box-shadow: 0 0 20px rgba(59,130,246,0.5); }
+
+        input::placeholder {
+            color: #475569 !important;
+        }
+
+        select option {
+            background-color: #0f172a;
+            color: white;
+        }
+
+        .safe-scroll { padding-bottom: 120px; overflow-y: auto; height: 100%; -webkit-overflow-scrolling: touch; }
+        .animate-up { animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(15px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        .no-select { user-select: none; -webkit-user-select: none; }
+        .native-active:active { transform: scale(0.97); opacity: 0.8; }
     </style>
 <script type="importmap">
 {

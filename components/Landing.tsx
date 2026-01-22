@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { UserCircle, Car, ArrowRight } from 'lucide-react';
+import { UserCircle, Car, ArrowRight, Download } from 'lucide-react';
 import { UserProfile } from '../types';
 
 interface Props {
@@ -8,12 +7,16 @@ interface Props {
   onStart: () => void;
   onSelect: () => void;
   onNewRegistration: () => void;
+  onInstall: () => void;
+  canInstall: boolean;
 }
 
-const Landing: React.FC<Props> = ({ user, onStart, onSelect, onNewRegistration }) => {
+const Landing: React.FC<Props> = ({ user, onStart, onSelect, onNewRegistration, onInstall, canInstall }) => {
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-10 bg-transparent text-white overflow-hidden relative">
-      <div className="z-10 text-center mb-16 space-y-8 animate-entrance">
+      <div className="z-10 text-center mb-10 space-y-8 animate-entrance">
         <div className="w-32 h-32 bg-white rounded-[3rem] mx-auto flex items-center justify-center shadow-[0_20px_60px_rgba(59,130,246,0.3)] border-2 border-black relative">
           <div className="absolute inset-0 bg-blue-500/10 rounded-[3rem] animate-pulse"></div>
           <Car size={64} className="text-black relative z-10" />
@@ -26,7 +29,17 @@ const Landing: React.FC<Props> = ({ user, onStart, onSelect, onNewRegistration }
         </div>
       </div>
 
-      <div className="z-10 w-full space-y-6 animate-entrance" style={{ animationDelay: '0.2s' }}>
+      <div className="z-10 w-full space-y-4 animate-entrance" style={{ animationDelay: '0.2s' }}>
+        {/* BOTÃO DE INSTALAÇÃO - SÓ APARECE SE NÃO ESTIVER INSTALADO */}
+        {canInstall && !isStandalone && (
+          <button 
+            onClick={onInstall}
+            className="w-full bg-blue-600 text-white p-6 rounded-[2.5rem] flex items-center justify-center gap-3 font-black uppercase italic shadow-2xl border-b-4 border-blue-800 active:scale-95 transition-all mb-4"
+          >
+            <Download size={20} /> INSTALAR APP NO CELULAR
+          </button>
+        )}
+
         {!user ? (
           <button 
             onClick={onStart}
@@ -67,7 +80,7 @@ const Landing: React.FC<Props> = ({ user, onStart, onSelect, onNewRegistration }
         )}
       </div>
       
-      <p className="absolute bottom-10 text-white/20 text-[8px] uppercase font-black tracking-[0.6em]">Professional Tool v2.5 • Native Engine</p>
+      <p className="absolute bottom-10 text-white/20 text-[8px] uppercase font-black tracking-[0.6em]">Professional Tool v3.0 • Standalone Engine</p>
     </div>
   );
 };

@@ -1,7 +1,7 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { UserProfile, TripSession, Expense, Race, RefuelEntry } from '../types';
-import { Download, AlertCircle, TrendingUp, BarChart3, Wallet } from 'lucide-react';
+import { Wallet, TrendingUp, AlertTriangle, ArrowDownCircle, ArrowUpCircle, RefreshCw, Navigation, History, Trophy, Calendar, Smartphone, Wrench } from 'lucide-react';
 
 interface Props {
   user: UserProfile;
@@ -9,151 +9,193 @@ interface Props {
   expenses: Expense[];
   refuels: RefuelEntry[];
   currentRaces: Race[];
+  maintCostPerKm: number;
+  onResetMonth?: () => void;
 }
 
-const Financeiro: React.FC<Props> = ({ user, sessions = [], expenses = [], refuels = [], currentRaces = [] }) => {
-  // PROCESSAMENTO DE DADOS LINEAR (Evita travamentos por complexidade)
-  const stats = useMemo(() => {
-    let tGross = 0, tAppTax = 0, tFuel = 0, tMaintRes = 0, tPersonalRes = 0, tOthers = 0;
+type Period = 'DIA' | 'SEMANA' | 'MÊS';
 
-    const safe = (n: any) => {
-      const val = parseFloat(n);
-      return isNaN(val) || !isFinite(val) ? 0 : val;
+const Financeiro: React.FC<Props> = ({ user, sessions = [], expenses = [], refuels = [], currentRaces = [], maintCostPerKm, onResetMonth }) => {
+  const [period, setPeriod] = useState<Period>('DIA');
+
+  const stats = useMemo(() => {
+    const now = new Date();
+    const filter = (date: number) => {
+      const d = new Date(date);
+      if (period === 'DIA') return d.toDateString() === now.toDateString();
+      if (period === 'SEMANA') return d >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     };
 
-    // 1. Processar todas as corridas (atuais e passadas) para pegar os ganhos e as reservas por KM
-    const allRaces: Race[] = [];
-    if (Array.isArray(currentRaces)) allRaces.push(...currentRaces);
-    if (Array.isArray(sessions)) {
-      sessions.forEach(s => { if (s?.races) allRaces.push(...s.races); });
-    }
+    let tGross = 0, tAppTax = 0, tMaint = 0, tRaceKm = 0;
+    let extraCosts = 0;
+    let fuelSpent = 0;
+    let totalShiftKm = 0;
+    let raceCount = 0;
 
-    allRaces.forEach(r => {
-      tGross += safe(r.grossEarnings);
-      tAppTax += safe(r.appTax);
-      tFuel += safe(r.fuelCost);
-      tMaintRes += safe(r.maintReserve); // Reserva guardada por KM rodado
-      tPersonalRes += safe(r.personalReserve);
+    const allRaces: Race[] = [...currentRaces.filter(r => filter(r.date))];
+    
+    sessions.filter(s => filter(s.date)).forEach(s => {
+      totalShiftKm += (s.endOdometer - s.startOdometer);
+      s.races.forEach(r => {
+        allRaces.push(r);
+        tRaceKm += r.raceKm;
+      });
     });
 
-    // 2. Processar Despesas Manuais (Notas Fiscais de custos que JÁ foram feitos)
-    if (Array.isArray(expenses)) {
-      expenses.forEach(e => {
-        const amt = safe(e.amount);
-        if (e.isWorkExpense) {
-          if (e.category === 'COMBUSTÍVEL') tFuel += amt;
-          else if (e.category === 'MANUTENÇÃO') {
-             // Quando uma manutenção é feita, ela usa o dinheiro da reserva. 
-             // Aqui no financeiro, mostramos o fluxo total.
-             tOthers += amt; 
-          }
-          else tOthers += amt;
-        } else tOthers += amt;
-      });
-    }
+    allRaces.forEach(r => {
+      tGross += r.grossEarnings;
+      tAppTax += r.appTax;
+      tMaint += r.maintReserve;
+      raceCount++;
+    });
 
-    // 3. Abastecimentos
-    if (Array.isArray(refuels)) {
-      refuels.forEach(r => { tFuel += safe(r.amountMoney); });
-    }
+    expenses.filter(e => filter(e.date) && e.isWorkExpense).forEach(e => extraCosts += e.amount);
+    refuels.filter(r => filter(r.date)).forEach(r => fuelSpent += r.amountMoney);
 
-    const totalSpent = tAppTax + tFuel + tMaintRes + tPersonalRes + tOthers;
-    return { tGross, tAppTax, tFuel, tMaintRes, tPersonalRes, tOthers, totalSpent, net: tGross - totalSpent };
-  }, [sessions, expenses, refuels, currentRaces]);
+    const fuelPrice = refuels[0]?.pricePerLiter || 5.85;
+    const fuelCostPerKm = fuelPrice / user.calculatedAvgConsumption;
+    const deadKm = Math.max(0, totalShiftKm - tRaceKm);
+    
+    // USA O CUSTO DINÂMICO PARA CALCULAR A RESERVA DO KM MORTO
+    const deadMaint = deadKm * maintCostPerKm;
+    const totalMaintProv = tMaint + deadMaint;
+    const deadFuelCost = deadKm * fuelCostPerKm;
 
-  const items = [
-    { label: 'Combustível', val: stats.tFuel, color: '#3b82f6' },
-    { label: 'Apps (Taxas)', val: stats.tAppTax, color: '#10b981' },
-    { label: 'Reserva Mecânica', val: stats.tMaintRes, color: '#f59e0b' },
-    { label: 'Poup./Reservas', val: stats.tPersonalRes, color: '#6366f1' },
-    { label: 'Outros Custos', val: stats.tOthers, color: '#f43f5e' }
-  ].filter(i => i.val > 0.1);
+    const totalSpent = tAppTax + fuelSpent + totalMaintProv + extraCosts + deadFuelCost;
+    const net = tGross - totalSpent;
 
-  const renderChart = () => {
-    if (items.length === 0) return (
-      <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-800 rounded-3xl">
-        <p className="text-[10px] font-black text-slate-700 uppercase italic">Aguardando dados</p>
-      </div>
-    );
+    return { 
+      tGross, 
+      tAppTax, 
+      fuelSpent, 
+      tMaint: totalMaintProv, 
+      extraCosts, 
+      net, 
+      totalSpent, 
+      deadKm, 
+      deadFuelCost, 
+      raceCount 
+    };
+  }, [period, sessions, currentRaces, expenses, refuels, user, maintCostPerKm]);
 
-    let cumulative = 0;
-    return (
-      <svg viewBox="0 0 200 200" className="w-full h-full max-w-[180px]">
-        {items.map((it, idx) => {
-          const percent = (it.val / (stats.totalSpent || 1)) * 100;
-          const offset = 100 - cumulative + 25;
-          cumulative += percent;
-          return (
-            <circle
-              key={idx} cx="100" cy="100" r="75"
-              fill="none" stroke={it.color} strokeWidth="20"
-              strokeDasharray={`${percent} ${100 - percent}`}
-              strokeDashoffset={offset} pathLength="100"
-            />
-          );
-        })}
-        <text x="50%" y="50%" textAnchor="middle" dy=".3em" className="fill-white font-black italic text-xl">100%</text>
-      </svg>
-    );
-  };
+  const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  const monthlyHistory = useMemo(() => {
+    const months: { [key: string]: any } = {};
+    sessions.forEach(s => {
+      const d = new Date(s.date);
+      const key = `${d.getMonth() + 1}/${d.getFullYear()}`;
+      if (!months[key]) months[key] = { gross: 0, net: 0, count: 0, label: key };
+      months[key].gross += s.totalGross;
+      months[key].net += s.totalNet;
+      months[key].count += s.races.length;
+    });
+    return Object.values(months).sort((a, b) => b.net - a.net);
+  }, [sessions]);
 
   return (
-    <div className="space-y-6 pb-40 animate-up overflow-hidden">
-      <header className="pt-3 px-1 flex justify-between items-center">
+    <div className="space-y-6 pb-40 animate-up">
+      <header className="pt-6 px-2 flex justify-between items-center">
         <div>
-          <p className="text-[10px] font-black uppercase text-blue-500 tracking-widest leading-none mb-1 opacity-70">Sua Operação</p>
-          <h1 className="text-2xl font-black italic text-white tracking-tighter">Balanço Real</h1>
+          <p className="text-[10px] font-black uppercase text-blue-500 tracking-widest leading-none mb-1">AUDITORIA</p>
+          <h1 className="text-2xl font-black italic text-white tracking-tighter leading-none">Financeira</h1>
         </div>
-        <div className="w-10 h-10 bg-slate-900 rounded-full flex items-center justify-center border border-white/5 shadow-xl"><Wallet size={18} className="text-blue-500" /></div>
+        <div className="flex bg-slate-900 p-1 rounded-xl border border-white/5">
+           {(['DIA', 'SEMANA', 'MÊS'] as Period[]).map(p => (
+             <button key={p} onClick={() => setPeriod(p)} className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${period === p ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-600'}`}>{p}</button>
+           ))}
+        </div>
       </header>
 
-      <div className="grid grid-cols-2 gap-3">
-         <div className="bento-card p-5 border-l-4 border-blue-500 bg-slate-900 shadow-xl">
-            <p className="text-[9px] font-black text-slate-500 uppercase mb-1">Ganhos Brutos</p>
-            <p className="text-2xl font-black italic text-white leading-none">R$ {stats.tGross.toFixed(0)}</p>
+      <div className="mx-2 bg-slate-900 rounded-[3rem] border border-white/5 p-8 space-y-6 shadow-2xl overflow-hidden relative">
+         <div className="absolute top-0 right-0 p-8 opacity-5"><Wallet size={120} /></div>
+         <div className="flex justify-between items-start relative z-10">
+            <div>
+               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Resultado Líquido</p>
+               <h2 className={`text-5xl font-black italic tracking-tighter leading-none ${stats.net >= 0 ? 'text-white' : 'text-rose-500'}`}>{formatCurrency(stats.net)}</h2>
+            </div>
+            <div className="bg-emerald-600/10 p-4 rounded-2xl border border-emerald-500/20 shadow-inner">
+               <Trophy size={24} className="text-emerald-500" />
+            </div>
          </div>
-         <div className="bento-card p-5 border-l-4 border-emerald-500 bg-emerald-950/20 shadow-xl">
-            <p className="text-[9px] font-black text-emerald-600 uppercase mb-1">Lucro Livre</p>
-            <p className="text-2xl font-black italic text-emerald-400 leading-none">R$ {stats.net.toFixed(0)}</p>
+
+         <div className="grid grid-cols-2 gap-4 relative z-10">
+            <div className="bg-slate-950 p-4 rounded-2xl border border-white/5 text-center">
+               <p className="text-[8px] font-black text-slate-500 uppercase mb-1">Corridas</p>
+               <p className="text-lg font-black text-white italic">{stats.raceCount}</p>
+            </div>
+            <div className="bg-slate-950 p-4 rounded-2xl border border-white/5 text-center">
+               <p className="text-[8px] font-black text-slate-500 uppercase mb-1">Eficiência</p>
+               <p className="text-lg font-black text-blue-400 italic">{((stats.net / (stats.tGross || 1)) * 100).toFixed(0)}%</p>
+            </div>
          </div>
       </div>
 
-      <div className="bento-card p-6 bg-slate-900/40 border-white/5 shadow-inner">
-         <div className="flex items-center justify-between mb-8">
-            <h2 className="text-[10px] font-black uppercase italic text-white tracking-widest flex items-center gap-2">
-              <BarChart3 size={14} className="text-blue-500" /> Distribuição de Custos
-            </h2>
-            <p className="text-[10px] font-black text-slate-600">Total: R$ {stats.totalSpent.toFixed(0)}</p>
-         </div>
-         
-         <div className="h-44 w-full flex items-center justify-center">
-            {renderChart()}
+      <div className="px-2 space-y-4">
+         <div className="bg-slate-900/40 border border-white/5 p-6 rounded-[2.5rem] space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+               <History size={16} className="text-blue-500" />
+               <h3 className="text-[10px] font-black text-white uppercase tracking-widest">Detalhamento de Fluxo</h3>
+            </div>
+            
+            <div className="flex justify-between items-center text-[10px] font-black uppercase">
+               <span className="text-slate-400">Faturamento Bruto</span>
+               <span className="text-white">{formatCurrency(stats.tGross)}</span>
+            </div>
+            
+            <div className="flex justify-between items-center text-[10px] font-black uppercase">
+               <span className="text-slate-500 flex items-center gap-2"><Smartphone size={12}/> Taxas Uber/99</span>
+               <span className="text-rose-500">- {formatCurrency(stats.tAppTax)}</span>
+            </div>
+
+            <div className="flex justify-between items-center text-[10px] font-black uppercase">
+               <span className="text-slate-500 flex items-center gap-2"><Wrench size={12}/> Reserva Manutenção (KM)</span>
+               <span className="text-purple-400">- {formatCurrency(stats.tMaint)}</span>
+            </div>
+
+            <div className="flex justify-between items-center text-[10px] font-black uppercase">
+               <span className="text-slate-500 flex items-center gap-2"><Navigation size={12}/> KM Vazio ({stats.deadKm.toFixed(0)}km)</span>
+               <span className="text-orange-400">- {formatCurrency(stats.deadFuelCost)}</span>
+            </div>
+            
+            <div className="flex justify-between items-center text-[10px] font-black uppercase">
+               <span className="text-slate-500 flex items-center gap-2">🍔 Gastos Logados</span>
+               <span className="text-rose-500">- {formatCurrency(stats.extraCosts + stats.fuelSpent)}</span>
+            </div>
+            
+            <div className="h-px bg-white/5 mt-4" />
+            
+            <div className="bg-blue-600/10 p-5 rounded-3xl flex justify-between items-center border border-blue-500/20 shadow-inner">
+               <span className="text-[10px] font-black text-blue-500 uppercase italic tracking-widest">Saldo no Bolso</span>
+               <span className="text-2xl font-black text-white italic tracking-tighter">{formatCurrency(stats.net)}</span>
+            </div>
          </div>
 
-         <div className="mt-8 grid grid-cols-2 gap-y-3 gap-x-5 px-1">
-            {items.map((it, idx) => (
-              <div key={idx} className="flex items-center gap-2.5">
-                 <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: it.color}} />
-                 <div className="flex flex-col min-w-0">
-                   <span className="text-[9px] font-bold text-slate-400 uppercase truncate leading-none">{it.label}</span>
-                   <span className="text-[8px] font-black text-white mt-1 leading-none">R$ {it.val.toFixed(0)}</span>
-                 </div>
-              </div>
-            ))}
-         </div>
-      </div>
-
-      <div className="p-5 rounded-[2rem] border-2 bg-slate-900/40 border-slate-800 flex items-start gap-4 shadow-xl">
-         <AlertCircle size={24} className="text-blue-500 flex-shrink-0" />
-         <div>
-            <p className="text-[10px] font-black text-white uppercase italic tracking-tight mb-1">Dica de Engenharia</p>
-            <p className="text-[11px] font-medium text-slate-400 leading-snug">
-              A "Reserva Mecânica" é o dinheiro que você deve separar de cada corrida para não ter sustos na oficina.
-            </p>
-         </div>
+         {monthlyHistory.length > 0 && (
+           <div className="space-y-3 pt-4">
+              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-4">Performance Mensal</h3>
+              {monthlyHistory.map((m, idx) => (
+                <div key={m.label} className="bg-slate-900 border border-white/5 p-5 rounded-[2rem] flex items-center justify-between shadow-xl">
+                   <div className="flex items-center gap-4">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${idx === 0 ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-500'}`}>
+                         {idx === 0 ? <Trophy size={20} /> : <Calendar size={20} />}
+                      </div>
+                      <div>
+                         <p className="text-xs font-black text-white uppercase italic">{m.label}</p>
+                         <p className="text-[8px] font-bold text-slate-600 uppercase tracking-widest">{m.count} Viagens</p>
+                      </div>
+                   </div>
+                   <div className="text-right">
+                      <p className="text-lg font-black text-emerald-400 italic leading-none">{formatCurrency(m.net)}</p>
+                      <p className="text-[7px] font-black text-slate-700 uppercase mt-1">LUCRO REAL</p>
+                   </div>
+                </div>
+              ))}
+           </div>
+         )}
       </div>
     </div>
   );
 };
-
 export default Financeiro;
