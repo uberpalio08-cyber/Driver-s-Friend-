@@ -1,25 +1,75 @@
 {
-  "name": "Driver's Friend",
+  "id": "com.driversfriend.app",
+  "name": "Driver's Friend: Gestão para Motoristas",
   "short_name": "DriversFriend",
-  "description": "Sistema Nativo de Gestão Profissional para Motoristas.",
+  "description": "Sistema profissional para gestão de custos, lucros e manutenção para motoristas de aplicativo.",
+  "lang": "pt-BR",
+  "dir": "ltr",
   "theme_color": "#020617",
   "background_color": "#020617",
-  "display": "fullscreen",
+  "display": "standalone",
   "display_override": [
+    "standalone",
     "fullscreen",
-    "standalone"
+    "window-controls-overlay"
   ],
-  "scope": "/",
-  "start_url": "/?utm_source=native_app",
   "orientation": "portrait",
+  "scope": "/",
+  "start_url": "/?utm_source=pwa_native",
   "categories": [
     "finance",
-    "productivity"
+    "productivity",
+    "utilities"
   ],
+  "iarc_rating_id": "",
+  "related_applications": [],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
       "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
@@ -30,15 +80,38 @@
       "purpose": "maskable"
     }
   ],
-  "requestFramePermissions": [
-    "geolocation",
-    "camera",
-    "microphone"
+  "screenshots": [
+    {
+      "src": "https://images.unsplash.com/photo-1617195920950-1145bf9a9c72?q=80&w=1080&h=1920&auto=format&fit=crop",
+      "sizes": "1080x1920",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Dashboard de Ganhos"
+    },
+    {
+      "src": "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?q=80&w=1920&h=1080&auto=format&fit=crop",
+      "sizes": "1920x1080",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "Gestão de Frota"
+    }
   ],
   "shortcuts": [
     {
-      "name": "Iniciar Expediente",
-      "url": "/",
+      "name": "Novo Gasto",
+      "url": "/?action=new_expense",
+      "description": "Lançar despesa rapidamente",
+      "icons": [
+        {
+          "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Abastecer",
+      "url": "/?action=refuel",
+      "description": "Registrar posto de combustível",
       "icons": [
         {
           "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
@@ -46,5 +119,10 @@
         }
       ]
     }
+  ],
+  "requestFramePermissions": [
+    "geolocation",
+    "camera",
+    "microphone"
   ]
 }
