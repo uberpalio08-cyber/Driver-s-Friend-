@@ -5,14 +5,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
+    <!-- Meta tags PWA e iOS -->
     <meta name="theme-color" content="#020617">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Driver's Friend">
     <meta name="application-name" content="Driver's Friend">
+    <meta name="description" content="A ferramenta definitiva para gestão de ganhos e custos de motoristas de aplicativo.">
 
     <link rel="manifest" href="./metadata.json">
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2555/2555013.png">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2555/2555013.png">
     
     <title>Driver's Friend Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -33,7 +37,7 @@
             background: #020617; padding-top: var(--sat); padding-bottom: var(--sab);
         }
 
-        /* CORREÇÃO DE CONTRASTE GLOBAL - FUNDO ESCURO, TEXTO BRANCO */
+        /* INPUTS E SELECTS COM ALTO CONTRASTE */
         input, select, textarea {
             background-color: #0f172a !important; 
             color: #ffffff !important;
@@ -43,14 +47,8 @@
             font-weight: 600;
         }
 
-        input::placeholder {
-            color: #475569 !important;
-        }
-
-        select option {
-            background-color: #0f172a;
-            color: white;
-        }
+        input::placeholder { color: #475569 !important; }
+        select option { background-color: #0f172a; color: white; }
 
         .safe-scroll { padding-bottom: 120px; overflow-y: auto; height: 100%; -webkit-overflow-scrolling: touch; }
         .animate-up { animation: slideUp 0.3s ease-out; }

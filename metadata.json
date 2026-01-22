@@ -2,19 +2,30 @@
   "id": "com.driversfriend.pro",
   "name": "Driver's Friend Pro",
   "short_name": "DriversFriend",
-  "description": "Gestão Inteligente para Motoristas Profissionais",
+  "description": "Gestão Inteligente e Contábil para Motoristas Profissionais",
   "lang": "pt-BR",
   "start_url": "./index.html",
+  "scope": "./",
   "theme_color": "#020617",
   "background_color": "#020617",
   "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "minimal-ui"
+  ],
   "orientation": "portrait",
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
@@ -23,15 +34,39 @@
       "purpose": "any"
     }
   ],
-  "requestFramePermissions": [
-    "camera",
-    "microphone",
-    "geolocation"
+  "screenshots": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Dashboard do Motorista"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Controle Financeiro"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Iniciar Turno",
+      "url": "./index.html",
+      "icons": [
+        {
+          "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
   ],
   "categories": [
     "finance",
-    "productivity"
+    "productivity",
+    "utilities"
   ],
-  "screenshots": [],
-  "prefer_related_applications": false
+  "prefer_related_applications": false,
+  "requestFramePermissions": []
 }
