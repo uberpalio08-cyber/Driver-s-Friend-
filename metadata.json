@@ -1,16 +1,16 @@
 {
   "name": "Driver's Friend",
   "short_name": "DriversFriend",
-  "description": "Gestão profissional de custos para motoristas de aplicativo.",
+  "description": "Sistema Nativo de Gestão Profissional para Motoristas.",
   "theme_color": "#020617",
   "background_color": "#020617",
-  "display": "standalone",
+  "display": "fullscreen",
   "display_override": [
-    "window-controls-overlay",
-    "minimal-ui"
+    "fullscreen",
+    "standalone"
   ],
   "scope": "/",
-  "start_url": "/",
+  "start_url": "/?utm_source=native_app",
   "orientation": "portrait",
   "categories": [
     "finance",
@@ -19,13 +19,32 @@
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "maskable"
     }
   ],
   "requestFramePermissions": [
     "geolocation",
-    "camera"
+    "camera",
+    "microphone"
+  ],
+  "shortcuts": [
+    {
+      "name": "Iniciar Expediente",
+      "url": "/",
+      "icons": [
+        {
+          "src": "https://cdn-icons-png.flaticon.com/512/2555/2555013.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
   ]
 }
