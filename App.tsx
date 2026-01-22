@@ -26,6 +26,16 @@ const App: React.FC = () => {
   const lastPos = useRef<GeolocationCoordinates | null>(null);
   const watchId = useRef<number | null>(null);
 
+  // Inicialização segura da IA
+  const ai = useMemo(() => {
+    try {
+      return new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+    } catch (e) {
+      console.error("Erro ao inicializar IA:", e);
+      return null;
+    }
+  }, []);
+
   const maintCostPerKm = useMemo(() => {
     if (!state.maintenance || state.maintenance.length === 0) return 0.12;
     return state.maintenance.reduce((acc, task) => {
@@ -34,6 +44,17 @@ const App: React.FC = () => {
       return acc + (cost / interval);
     }, 0);
   }, [state.maintenance]);
+
+  // Função para forçar o pedido de permissão nativo
+  const requestPermissions = () => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => console.log("Permissão concedida:", pos.coords),
+        (err) => console.warn("Permissão negada ou erro:", err),
+        { enableHighAccuracy: true }
+      );
+    }
+  };
 
   useEffect(() => {
     if (phase === 'IDLE') {
@@ -48,10 +69,9 @@ const App: React.FC = () => {
       setCurrentRaceTimes(p => ({ ...p, boarding: Date.now() }));
     }
     
-    // Configurações críticas para App Nativo: Alta Precisão e Sem Cache
     const geoOptions = { 
       enableHighAccuracy: true, 
-      timeout: 5000, 
+      timeout: 10000, 
       maximumAge: 0 
     };
 
@@ -63,7 +83,7 @@ const App: React.FC = () => {
         const dLon = (pos.coords.longitude - lastPos.current.longitude) * Math.PI / 180;
         const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lastPos.current.latitude * Math.PI/180) * Math.cos(pos.coords.latitude * Math.PI/180) * Math.sin(dLon/2) * Math.sin(dLon/2);
         const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        if (dist > 0.003) { // Reduzi sensibilidade para evitar "drift" parado
+        if (dist > 0.005) { 
           setSessionKms(prev => {
             if (phase === 'ON_SHIFT') return { ...prev, particular: prev.particular + dist };
             if (phase === 'ACCEPTING') return { ...prev, deslocamento: prev.deslocamento + dist };
@@ -93,8 +113,6 @@ const App: React.FC = () => {
   useEffect(() => {
     if (state.isLoaded) localStorage.setItem(STORAGE_KEY, JSON.stringify({ state, phase }));
   }, [state, phase]);
-
-  const ai = useMemo(() => new GoogleGenAI({ apiKey: process.env.API_KEY }), []);
 
   const handleFinishRace = (gross: number) => {
     if (!state.user) return;
@@ -136,10 +154,6 @@ const App: React.FC = () => {
     setStartCoords(null);
   };
 
-  const handleRemoveRace = (id: string) => {
-    setState(prev => ({ ...prev, currentRaces: prev.currentRaces.filter(r => r.id !== id) }));
-  };
-
   const handleFinishShift = (odo: number) => {
     if (!state.user) return;
     const totalGross = state.currentRaces.reduce((acc, r) => acc + r.grossEarnings, 0);
@@ -155,12 +169,17 @@ const App: React.FC = () => {
   return (
     <div id="root" className="flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden">
       <div className="flex-1 overflow-y-auto px-4 safe-scroll pt-2">
-        {view === 'LANDING' && <Landing user={state.user} onStart={() => setView('ONBOARDING')} onSelect={() => setView('HOME')} onNewRegistration={() => { localStorage.clear(); window.location.reload(); }} />}
-        {view === 'ONBOARDING' && <Onboarding ai={ai} onComplete={(u) => { setState(p => ({ ...p, user: u })); setView('HOME'); }} />}
+        {view === 'LANDING' && <Landing 
+          user={state.user} 
+          onStart={() => { requestPermissions(); setView('ONBOARDING'); }} 
+          onSelect={() => { requestPermissions(); setView('HOME'); }} 
+          onNewRegistration={() => { localStorage.clear(); window.location.reload(); }} 
+        />}
+        {view === 'ONBOARDING' && ai && <Onboarding ai={ai} onComplete={(u) => { setState(p => ({ ...p, user: u })); setView('HOME'); }} />}
         {view === 'HOME' && state.user && <Home 
           user={state.user} phase={phase} setPhase={setPhase} kms={sessionKms} 
           currentRaces={state.currentRaces} maintenance={state.maintenance} 
-          onFinishRace={handleFinishRace} onRemoveRace={handleRemoveRace} 
+          onFinishRace={handleFinishRace} onRemoveRace={(id) => setState(p => ({ ...p, currentRaces: p.currentRaces.filter(r => r.id !== id) }))} 
           onFinishShift={handleFinishShift} onUpdateUser={(u) => setState(p => ({ ...p, user: u }))} 
         />}
         {view === 'FINANCEIRO' && state.user && <Financeiro user={state.user} sessions={state.sessions} expenses={state.expenses} refuels={state.refuels} currentRaces={state.currentRaces} />}
