@@ -1,182 +1,156 @@
 
-import React, { useState, useMemo } from 'react';
-import { TripSession, UserProfile, Expense, Race } from '../types';
-import { Download, FileText, Activity, PieChart as PieIcon } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import React, { useMemo } from 'react';
+import { UserProfile, TripSession, Expense, Race, RefuelEntry } from '../types';
+import { Download, AlertCircle, TrendingUp, BarChart3, Wallet } from 'lucide-react';
 
 interface Props {
+  user: UserProfile;
   sessions: TripSession[];
   expenses: Expense[];
-  maintenance: any[];
-  user: UserProfile;
+  refuels: RefuelEntry[];
   currentRaces: Race[];
-  currentDailyExpenses: Expense[];
 }
 
-const Financeiro: React.FC<Props> = ({ sessions, expenses, user, currentRaces, currentDailyExpenses }) => {
-  const [period, setPeriod] = useState<'SEMANAL' | 'QUINZENAL' | 'MENSAL'>('MENSAL');
-
+const Financeiro: React.FC<Props> = ({ user, sessions = [], expenses = [], refuels = [], currentRaces = [] }) => {
+  // PROCESSAMENTO DE DADOS LINEAR (Evita travamentos por complexidade)
   const stats = useMemo(() => {
-    const days = period === 'SEMANAL' ? 7 : period === 'QUINZENAL' ? 15 : 30;
-    const now = Date.now();
-    const periodMs = days * 24 * 60 * 60 * 1000;
-    
-    // Filtra dados históricos
-    const pastSessions = sessions.filter(s => s.date >= now - periodMs);
-    const pastExpenses = expenses.filter(e => e.date >= now - periodMs);
-    
-    // Agrega Faturamento Bruto (Passado + Atual)
-    const grossPast = pastSessions.reduce((acc, s) => acc + s.totalGross, 0);
-    const grossActive = currentRaces.reduce((acc, r) => acc + (r.grossEarnings || 0), 0);
-    const gross = grossPast + grossActive;
+    let tGross = 0, tAppTax = 0, tFuel = 0, tMaintRes = 0, tPersonalRes = 0, tOthers = 0;
 
-    // Agrega Combustível
-    const fuelPast = pastSessions.reduce((acc, s) => acc + s.races.reduce((ra, r) => ra + r.fuelCost, 0), 0);
-    const fuelActive = currentRaces.reduce((acc, r) => acc + (r.fuelCost || 0), 0);
-    const fuel = fuelPast + fuelActive;
+    const safe = (n: any) => {
+      const val = parseFloat(n);
+      return isNaN(val) || !isFinite(val) ? 0 : val;
+    };
 
-    // Agrega Reservas
-    const maintResPast = pastSessions.reduce((acc, s) => acc + s.races.reduce((ra, r) => ra + (r.maintenanceReserve || 0), 0), 0);
-    const maintResActive = currentRaces.reduce((acc, r) => acc + (r.maintenanceReserve || 0), 0);
-    const maintRes = maintResPast + maintResActive;
+    // 1. Processar todas as corridas (atuais e passadas) para pegar os ganhos e as reservas por KM
+    const allRaces: Race[] = [];
+    if (Array.isArray(currentRaces)) allRaces.push(...currentRaces);
+    if (Array.isArray(sessions)) {
+      sessions.forEach(s => { if (s?.races) allRaces.push(...s.races); });
+    }
 
-    const emergencyResPast = pastSessions.reduce((acc, s) => acc + s.races.reduce((ra, r) => ra + (r.emergencyReserve || 0), 0), 0);
-    const emergencyResActive = currentRaces.reduce((acc, r) => acc + (r.emergencyReserve || 0), 0);
-    const emergencyRes = emergencyResPast + emergencyResActive;
+    allRaces.forEach(r => {
+      tGross += safe(r.grossEarnings);
+      tAppTax += safe(r.appTax);
+      tFuel += safe(r.fuelCost);
+      tMaintRes += safe(r.maintReserve); // Reserva guardada por KM rodado
+      tPersonalRes += safe(r.personalReserve);
+    });
 
-    // Agrega Taxas App
-    const appTaxPast = pastSessions.reduce((acc, s) => acc + s.races.reduce((ra, r) => ra + r.appTax, 0), 0);
-    const appTaxActive = currentRaces.reduce((acc, r) => acc + (r.appTax || 0), 0);
-    const appTax = appTaxPast + appTaxActive;
-    
-    // Despesas extras (Lançadas manualmente + Despesas ativas do dia)
-    const extraCostsPast = pastExpenses.reduce((acc, e) => acc + e.amount, 0);
-    const extraCostsActive = currentDailyExpenses.reduce((acc, e) => acc + e.amount, 0);
-    const extraCosts = extraCostsPast + extraCostsActive;
-    
-    // Lucro Líquido Real
-    const netPast = pastSessions.reduce((acc, s) => acc + s.totalNet, 0);
-    const netActive = currentRaces.reduce((acc, r) => acc + r.netProfit, 0) - extraCostsActive;
-    const netSalary = netPast + netActive;
+    // 2. Processar Despesas Manuais (Notas Fiscais de custos que JÁ foram feitos)
+    if (Array.isArray(expenses)) {
+      expenses.forEach(e => {
+        const amt = safe(e.amount);
+        if (e.isWorkExpense) {
+          if (e.category === 'COMBUSTÍVEL') tFuel += amt;
+          else if (e.category === 'MANUTENÇÃO') {
+             // Quando uma manutenção é feita, ela usa o dinheiro da reserva. 
+             // Aqui no financeiro, mostramos o fluxo total.
+             tOthers += amt; 
+          }
+          else tOthers += amt;
+        } else tOthers += amt;
+      });
+    }
 
-    const totalCosts = fuel + maintRes + emergencyRes + appTax + extraCosts;
+    // 3. Abastecimentos
+    if (Array.isArray(refuels)) {
+      refuels.forEach(r => { tFuel += safe(r.amountMoney); });
+    }
 
-    return { gross, fuel, maintRes, emergencyRes, appTax, netSalary, extraCosts, totalCosts };
-  }, [sessions, expenses, period, currentRaces, currentDailyExpenses]);
+    const totalSpent = tAppTax + tFuel + tMaintRes + tPersonalRes + tOthers;
+    return { tGross, tAppTax, tFuel, tMaintRes, tPersonalRes, tOthers, totalSpent, net: tGross - totalSpent };
+  }, [sessions, expenses, refuels, currentRaces]);
 
-  const costChartData = useMemo(() => [
-    { name: 'Combustível', value: stats.fuel, color: '#FF4B4B' },
-    { name: 'Reservas', value: stats.maintRes + stats.emergencyRes, color: '#FFB84D' },
-    { name: 'Taxas App', value: stats.appTax, color: '#4D94FF' },
-    { name: 'Custos Extras', value: stats.extraCosts, color: '#A14DFF' }
-  ].filter(d => d.value > 0), [stats]);
+  const items = [
+    { label: 'Combustível', val: stats.tFuel, color: '#3b82f6' },
+    { label: 'Apps (Taxas)', val: stats.tAppTax, color: '#10b981' },
+    { label: 'Reserva Mecânica', val: stats.tMaintRes, color: '#f59e0b' },
+    { label: 'Poup./Reservas', val: stats.tPersonalRes, color: '#6366f1' },
+    { label: 'Outros Custos', val: stats.tOthers, color: '#f43f5e' }
+  ].filter(i => i.val > 0.1);
 
-  const generateCSV = () => {
-    const headers = ["Data", "Categoria", "Descricao", "Valor (R$)"];
-    const rows: string[][] = [];
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + headers.join(",") + "\n"
-      + rows.map(e => e.join(",")).join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `relatorio_df_${period.toLowerCase()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  const renderChart = () => {
+    if (items.length === 0) return (
+      <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-800 rounded-3xl">
+        <p className="text-[10px] font-black text-slate-700 uppercase italic">Aguardando dados</p>
+      </div>
+    );
 
-  const generatePDF = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    const content = `
-      <html>
-        <head><title>Relatório - Driver's Friend</title></head>
-        <body style="font-family:sans-serif; padding:40px;">
-          <h1>Relatório Profissional</h1>
-          <p>Líquido no Período: R$ ${stats.netSalary.toFixed(2)}</p>
-        </body>
-      </html>`;
-    printWindow.document.write(content);
-    printWindow.document.close();
-    printWindow.print();
+    let cumulative = 0;
+    return (
+      <svg viewBox="0 0 200 200" className="w-full h-full max-w-[180px]">
+        {items.map((it, idx) => {
+          const percent = (it.val / (stats.totalSpent || 1)) * 100;
+          const offset = 100 - cumulative + 25;
+          cumulative += percent;
+          return (
+            <circle
+              key={idx} cx="100" cy="100" r="75"
+              fill="none" stroke={it.color} strokeWidth="20"
+              strokeDasharray={`${percent} ${100 - percent}`}
+              strokeDashoffset={offset} pathLength="100"
+            />
+          );
+        })}
+        <text x="50%" y="50%" textAnchor="middle" dy=".3em" className="fill-white font-black italic text-xl">100%</text>
+      </svg>
+    );
   };
 
   return (
-    <div className="p-5 space-y-6 pb-24 animate-up">
-      <header className="pt-6">
-        <h1 className="text-3xl font-black italic text-outline">Financeiro</h1>
+    <div className="space-y-6 pb-40 animate-up overflow-hidden">
+      <header className="pt-3 px-1 flex justify-between items-center">
+        <div>
+          <p className="text-[10px] font-black uppercase text-blue-500 tracking-widest leading-none mb-1 opacity-70">Sua Operação</p>
+          <h1 className="text-2xl font-black italic text-white tracking-tighter">Balanço Real</h1>
+        </div>
+        <div className="w-10 h-10 bg-slate-900 rounded-full flex items-center justify-center border border-white/5 shadow-xl"><Wallet size={18} className="text-blue-500" /></div>
       </header>
 
-      <div className="flex bg-black/40 p-1 rounded-2xl border border-white/10 glass-card">
-        {(['SEMANAL', 'QUINZENAL', 'MENSAL'] as const).map(p => (
-          <button key={p} onClick={() => setPeriod(p)} className={`flex-1 py-3 text-[10px] font-black rounded-xl transition-all uppercase tracking-widest ${period === p ? 'bg-white text-black shadow-lg' : 'text-zinc-500'}`}>
-            {p}
-          </button>
-        ))}
+      <div className="grid grid-cols-2 gap-3">
+         <div className="bento-card p-5 border-l-4 border-blue-500 bg-slate-900 shadow-xl">
+            <p className="text-[9px] font-black text-slate-500 uppercase mb-1">Ganhos Brutos</p>
+            <p className="text-2xl font-black italic text-white leading-none">R$ {stats.tGross.toFixed(0)}</p>
+         </div>
+         <div className="bento-card p-5 border-l-4 border-emerald-500 bg-emerald-950/20 shadow-xl">
+            <p className="text-[9px] font-black text-emerald-600 uppercase mb-1">Lucro Livre</p>
+            <p className="text-2xl font-black italic text-emerald-400 leading-none">R$ {stats.net.toFixed(0)}</p>
+         </div>
       </div>
 
-      <div className="glass-card p-6 space-y-6 shadow-2xl">
-        <div className="flex justify-between items-start">
-          <div className="space-y-1">
-            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest text-outline-sm flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /> Lucro Líquido Acumulado
+      <div className="bento-card p-6 bg-slate-900/40 border-white/5 shadow-inner">
+         <div className="flex items-center justify-between mb-8">
+            <h2 className="text-[10px] font-black uppercase italic text-white tracking-widest flex items-center gap-2">
+              <BarChart3 size={14} className="text-blue-500" /> Distribuição de Custos
+            </h2>
+            <p className="text-[10px] font-black text-slate-600">Total: R$ {stats.totalSpent.toFixed(0)}</p>
+         </div>
+         
+         <div className="h-44 w-full flex items-center justify-center">
+            {renderChart()}
+         </div>
+
+         <div className="mt-8 grid grid-cols-2 gap-y-3 gap-x-5 px-1">
+            {items.map((it, idx) => (
+              <div key={idx} className="flex items-center gap-2.5">
+                 <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: it.color}} />
+                 <div className="flex flex-col min-w-0">
+                   <span className="text-[9px] font-bold text-slate-400 uppercase truncate leading-none">{it.label}</span>
+                   <span className="text-[8px] font-black text-white mt-1 leading-none">R$ {it.val.toFixed(0)}</span>
+                 </div>
+              </div>
+            ))}
+         </div>
+      </div>
+
+      <div className="p-5 rounded-[2rem] border-2 bg-slate-900/40 border-slate-800 flex items-start gap-4 shadow-xl">
+         <AlertCircle size={24} className="text-blue-500 flex-shrink-0" />
+         <div>
+            <p className="text-[10px] font-black text-white uppercase italic tracking-tight mb-1">Dica de Engenharia</p>
+            <p className="text-[11px] font-medium text-slate-400 leading-snug">
+              A "Reserva Mecânica" é o dinheiro que você deve separar de cada corrida para não ter sustos na oficina.
             </p>
-            <p className="text-4xl font-black italic text-outline leading-none">R$ {stats.netSalary.toFixed(2)}</p>
-          </div>
-          <Activity size={24} className="text-white/30" />
-        </div>
-
-        <div className="space-y-2">
-           <div className="flex items-center gap-2 mb-2">
-              <PieIcon size={14} className="text-zinc-500" />
-              <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Fluxo de Custos (Total)</p>
-           </div>
-           <div className="h-56 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie 
-                  data={costChartData} 
-                  innerRadius={60} 
-                  outerRadius={80} 
-                  paddingAngle={5} 
-                  dataKey="value" 
-                  stroke="none"
-                >
-                  {costChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ borderRadius: '15px', background: '#000', border: '1px solid #333', fontSize: '11px', fontWeight: 'bold', color: '#fff' }} 
-                  itemStyle={{ color: '#fff' }}
-                  formatter={(val: number) => `R$ ${val.toFixed(2)}`}
-                />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase', paddingTop: '20px' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white p-5 rounded-2xl text-black shadow-xl">
-             <p className="text-[9px] font-black uppercase text-zinc-500 leading-none mb-1">Bruto Total</p>
-             <p className="text-xl font-black italic leading-none">R$ {stats.gross.toFixed(0)}</p>
-          </div>
-          <div className="bg-black/40 p-5 rounded-2xl border border-white/5 text-center flex flex-col justify-center">
-             <p className="text-[9px] font-black uppercase text-zinc-500 leading-none mb-1 text-outline-sm">Gastos/Invest.</p>
-             <p className="text-lg font-black italic text-outline leading-none">R$ {stats.totalCosts.toFixed(0)}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-         <button onClick={generateCSV} className="bg-zinc-900 border border-zinc-800 p-5 rounded-3xl flex flex-col items-center gap-2 active:scale-95 shadow-xl group transition-all">
-            <Download size={20} className="text-white group-hover:translate-y-0.5 transition-transform" />
-            <span className="text-[9px] font-black uppercase tracking-widest text-outline-sm">Exportar Dados</span>
-         </button>
-         <button onClick={generatePDF} className="bg-white text-black p-5 rounded-3xl flex flex-col items-center gap-2 active:scale-95 shadow-xl group transition-all">
-            <FileText size={20} className="group-hover:scale-110 transition-transform" />
-            <span className="text-[9px] font-black uppercase tracking-widest">Relatório PDF</span>
-         </button>
+         </div>
       </div>
     </div>
   );

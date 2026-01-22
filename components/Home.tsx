@@ -1,304 +1,305 @@
 
-import React, { useState, useMemo } from 'react';
-import { UserProfile, TrackingPhase, Race, Expense } from '../types';
-import { Play, Users, UserPlus, Flag, ChevronDown, ChevronUp, Fuel } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { UserProfile, TrackingPhase, Race, AppProfile, MaintenanceTask } from '../types';
+import { Play, UserPlus, Users, Flag, Gauge, Settings, Trash2, Clock, Navigation, ChevronDown, ChevronUp, Fuel, UserCircle, MapPin, Check, Info } from 'lucide-react';
 
 interface Props {
   user: UserProfile;
   phase: TrackingPhase;
   setPhase: (p: TrackingPhase) => void;
-  onStartShift: (odo: number, config: { appName: string, appPercentage: number, useFixed: boolean, fixedVal: number }) => void;
-  kms: { kmParticular: number; kmDeslocamento: number; kmPassageiro: number };
-  onFinishSession: (startOdo: number, endOdo: number) => void;
-  onFinishRace: (gross: number) => void;
+  kms: { particular: number; deslocamento: number; passageiro: number };
   currentRaces: Race[];
-  currentDailyExpenses: Expense[];
+  maintenance: MaintenanceTask[];
+  onFinishRace: (gross: number) => void;
+  onRemoveRace: (id: string) => void;
+  onFinishShift: (odo: number) => void;
+  onUpdateUser: (u: UserProfile) => void;
 }
 
-const Home: React.FC<Props> = ({ user, phase, setPhase, onStartShift, kms, onFinishSession, onFinishRace, currentRaces, currentDailyExpenses }) => {
-  const [showStart, setShowStart] = useState(false);
-  const [showEnd, setShowEnd] = useState(false);
+const Home: React.FC<Props> = ({ user, phase, setPhase, kms, currentRaces = [], maintenance = [], onFinishRace, onRemoveRace, onFinishShift, onUpdateUser }) => {
+  const [showOdo, setShowOdo] = useState(false);
   const [showGross, setShowGross] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  
-  // States dos modais
-  const [startOdo, setStartOdo] = useState('');
-  const [shiftAppName, setShiftAppName] = useState('');
-  const [shiftAppPercent, setShiftAppPercent] = useState('');
-  const [useFixed, setUseFixed] = useState(user.useFixedFare);
-  const [fixedVal, setFixedVal] = useState('');
-
-  const [endOdo, setEndOdo] = useState('');
+  const [showAppConfig, setShowAppConfig] = useState(false);
+  const [odoInput, setOdoInput] = useState('');
   const [grossInput, setGrossInput] = useState('');
+  const [expandedRaceId, setExpandedRaceId] = useState<string | null>(null);
+  
+  const [newApp, setNewApp] = useState({ name: '', tax: '12', isFixed: false, fixedVal: '15.00' });
 
-  const grossToday = useMemo(() => {
-    return currentRaces.reduce((acc, r) => acc + (r.grossEarnings || 0), 0);
-  }, [currentRaces]);
+  // Consolidação de Cálculos de Lucro e Meta
+  const dashboardStats = useMemo(() => {
+    const net = (currentRaces || []).reduce((acc, r) => acc + r.netProfit, 0);
+    const progress = Math.min(100, (net / (user.dailyGoal || 1)) * 100);
+    return { net, progress };
+  }, [currentRaces, user.dailyGoal]);
 
-  const netSalaryToday = useMemo(() => {
-    const racesNet = currentRaces.reduce((acc, r) => acc + (r.netProfit || 0), 0);
-    const expensesValue = currentDailyExpenses.reduce((acc, e) => acc + e.amount, 0);
-    return racesNet - expensesValue;
-  }, [currentRaces, currentDailyExpenses]);
+  // Taxa de manutenção consolidada
+  const currentMaintRate = useMemo(() => {
+    if (!maintenance || maintenance.length === 0) return 0.12;
+    return maintenance.reduce((acc, task) => acc + ((Number(task.lastCost) || 0) / (Number(task.interval) || 1)), 0);
+  }, [maintenance]);
 
-  const targetNetGoal = user.dailyGoal;
-  const remainingToGoal = Math.max(0, targetNetGoal - netSalaryToday);
-  const progressPercent = Math.min(100, (netSalaryToday / targetNetGoal) * 100);
+  const selectedApp = useMemo(() => 
+    user.appProfiles.find(p => p.id === user.selectedAppProfileId), 
+  [user.appProfiles, user.selectedAppProfileId]);
+
+  // Efeito unificado para preenchimento de valor bruto fixo
+  useEffect(() => {
+    if (showGross && selectedApp?.isFixedGross) {
+      setGrossInput(selectedApp.fixedGrossValue.toString());
+    } else if (showGross) {
+      setGrossInput('');
+    }
+  }, [showGross, selectedApp]);
 
   const formatTime = (ts: number) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  // Cálculo de combustível para o modal de faturamento
-  const estimatedFuelCost = useMemo(() => {
-    const totalKm = kms.kmDeslocamento + kms.kmPassageiro;
-    const liters = totalKm / user.calculatedAvgConsumption;
-    return liters * 5.89; // Preço base para estimativa visual
-  }, [kms, user.calculatedAvgConsumption]);
+  const totalCurrentKm = kms.deslocamento + kms.passageiro;
 
   return (
-    <div className="p-5 space-y-6 animate-up">
-      <header className="pt-6">
-        <h1 className="text-3xl font-black italic text-outline">Olá, {user.name}</h1>
+    <div className="space-y-5 pb-40">
+      <header className="flex justify-between items-center pt-3 px-1">
+        <div>
+          <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1 opacity-70">Operacional Ativo</p>
+          <h1 className="text-xl font-black italic text-white tracking-tighter leading-none">{user.name}'s Friend</h1>
+        </div>
+        <div className="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-full border border-white/5 shadow-xl">
+           <Gauge size={12} className="text-blue-500" />
+           <span className="text-[10px] font-black text-slate-300 uppercase">{user.lastOdometer.toLocaleString()} KM</span>
+        </div>
       </header>
 
-      {/* Card de Meta Principal */}
-      <div className="glass-card p-8 shadow-2xl relative overflow-hidden flex flex-col items-center">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-2 text-outline-sm">Falta para Lucro Líquido</p>
-        <p className="text-5xl font-black italic text-outline mb-6">R$ {remainingToGoal.toFixed(2)}</p>
-        
-        <div className="w-full space-y-3">
-           <div className="flex justify-between items-end px-1">
-              <div>
-                 <p className="text-[8px] font-bold text-zinc-500 uppercase text-outline-sm">Lucro Adquirido</p>
-                 <p className="text-xl font-black text-emerald-400 text-outline">R$ {netSalaryToday.toFixed(2)}</p>
-              </div>
-              <div className="text-right">
-                 <p className="text-[8px] font-bold text-zinc-500 uppercase text-outline-sm">App: {user.appName}</p>
-                 <p className="text-xs font-bold text-zinc-300">Bruto: R$ {grossToday.toFixed(2)}</p>
-              </div>
-           </div>
-           <div className="h-3 bg-white/10 rounded-full overflow-hidden border border-white/5">
-              <div className="h-full bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.7)] transition-all duration-700" style={{ width: `${progressPercent}%` }} />
-           </div>
-           <div className="flex justify-between items-center px-1">
-              <p className="text-[8px] font-black text-zinc-500 uppercase italic">Meta Líquida: R$ {targetNetGoal.toFixed(2)}</p>
-              <p className="text-xl font-black text-emerald-500 text-outline italic">{progressPercent.toFixed(1)}%</p>
-           </div>
+      {/* DASHBOARD DE LUCRO LÍQUIDO */}
+      <div className="bento-card p-6 border-l-4 border-blue-500 bg-slate-800/10 shadow-2xl relative overflow-hidden">
+        <div className="flex justify-between items-start mb-4 relative z-10">
+          <div>
+            <p className="text-[10px] font-black uppercase text-slate-500 mb-1 tracking-widest">Lucro Livre (Limpo)</p>
+            <p className="text-4xl font-black italic text-white tracking-tighter leading-none">R$ {dashboardStats.net.toFixed(2)}</p>
+          </div>
+          <div className="text-right">
+             <p className="text-[10px] font-black text-blue-400 uppercase leading-none">{dashboardStats.progress.toFixed(0)}% Meta</p>
+          </div>
+        </div>
+        <div className="h-2 bg-slate-950 rounded-full overflow-hidden shadow-inner relative z-10">
+           <div className="h-full bg-blue-500 transition-all duration-1000 shadow-[0_0_20px_rgba(59,130,246,0.6)]" style={{width: `${dashboardStats.progress}%`}} />
+        </div>
+        <div className="absolute top-0 right-0 p-8 opacity-5">
+           <Navigation size={120} className="text-white" />
         </div>
       </div>
 
-      {/* Controles Operacionais */}
-      <div>
+      {/* CONTROLES DE EXPEDIENTE */}
+      <div className="space-y-3">
         {phase === 'IDLE' ? (
-          <button onClick={() => setShowStart(true)} className="w-full bg-white text-black py-10 rounded-3xl shadow-2xl border-2 border-black flex flex-col items-center gap-3 active:scale-95 transition-all">
-            <Play size={32} fill="black" />
-            <span className="text-lg font-black uppercase italic tracking-tighter">Iniciar Expediente</span>
+          <button onClick={() => setShowAppConfig(true)} className="w-full bg-blue-600 text-white py-14 rounded-[3rem] shadow-2xl flex flex-col items-center gap-3 border-b-8 border-blue-800 active:scale-95 transition-all">
+            <Play size={44} fill="white" />
+            <span className="text-xl font-black uppercase italic tracking-tighter">Iniciar Expediente</span>
           </button>
         ) : (
-          <div className="glass-card p-5 space-y-5">
-            <div className="flex justify-between items-center pb-2 border-b border-white/10">
-              <p className="text-[10px] font-black uppercase text-outline-sm flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Em Serviço ({user.appName})
-              </p>
-              <button onClick={() => setShowEnd(true)} className="text-[9px] font-bold text-zinc-500 uppercase underline">Encerrar Turno</button>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-black/40 p-3 rounded-xl border border-white/5 text-center">
-                <p className="text-[8px] font-bold text-zinc-500 uppercase">Km Particular</p>
-                <p className="text-lg font-black text-outline">{kms.kmParticular.toFixed(1)}</p>
-              </div>
-              <div className="bg-black/40 p-3 rounded-xl border border-white/5 text-center">
-                <p className="text-[8px] font-bold text-zinc-500 uppercase">Km Trabalho</p>
-                <p className="text-lg font-black text-outline">{(kms.kmDeslocamento + kms.kmPassageiro).toFixed(1)}</p>
-              </div>
+          <div className="space-y-3 animate-up">
+            <div className="flex gap-3">
+               <button onClick={() => setShowAppConfig(true)} className="flex-1 bg-slate-900 border border-white/5 p-4 rounded-2xl flex items-center justify-between shadow-xl">
+                  <div className="text-left">
+                     <p className="text-[7px] font-black text-slate-500 uppercase">App Selecionado</p>
+                     <p className="text-[12px] font-black text-white uppercase italic truncate max-w-[120px]">{selectedApp?.name || '---'}</p>
+                  </div>
+                  <Settings size={16} className="text-blue-500" />
+               </button>
+               <button onClick={() => { setOdoInput(''); setShowOdo(true); }} className="px-5 bg-rose-600/10 border border-rose-500/20 py-4 rounded-2xl text-rose-500 font-black uppercase text-[9px] tracking-widest shadow-xl">Encerrar</button>
             </div>
 
-            <div className="space-y-3">
-              {phase === 'PARTICULAR' && (
-                <button onClick={() => setPhase('DESLOCAMENTO')} className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase italic shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
-                  <UserPlus size={20} /> Aceitar Corrida
-                </button>
-              )}
-              {phase === 'DESLOCAMENTO' && (
-                <button onClick={() => setPhase('PASSAGEIRO')} className="w-full bg-zinc-800 text-white py-5 rounded-2xl font-black uppercase italic border border-white/20 active:scale-95 transition-all flex items-center justify-center gap-3">
-                  <Users size={20} /> Embarcar Pax
-                </button>
-              )}
-              {phase === 'PASSAGEIRO' && (
-                <button 
-                  onClick={() => user.useFixedFare ? onFinishRace(user.fixedFareValue) : setShowGross(true)} 
-                  className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black uppercase italic border border-white/20 shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3"
-                >
-                  <Flag size={20} /> Finalizar Corrida
-                </button>
-              )}
-            </div>
+            {phase === 'ON_SHIFT' && (
+              <button onClick={() => setPhase('ACCEPTING')} className="w-full bg-blue-600 text-white py-9 rounded-[2.5rem] font-black uppercase italic text-lg shadow-xl border-b-8 border-blue-800 flex items-center justify-center gap-4 active:scale-95 transition-all">
+                <UserPlus size={28} /> Aceitar Corrida
+              </button>
+            )}
+            {phase === 'ACCEPTING' && (
+              <button onClick={() => setPhase('BOARDING')} className="w-full bg-white text-black py-9 rounded-[2.5rem] font-black uppercase italic text-lg shadow-xl border-b-8 border-slate-300 flex items-center justify-center gap-4 active:scale-95 transition-all">
+                <Users size={28} /> Iniciar Viagem (Pax)
+              </button>
+            )}
+            {phase === 'BOARDING' && (
+              <button onClick={() => setShowGross(true)} className="w-full bg-emerald-600 text-white py-9 rounded-[2.5rem] font-black uppercase italic text-lg shadow-xl border-b-8 border-emerald-800 flex items-center justify-center gap-4 active:scale-95 transition-all">
+                <Flag size={28} /> Finalizar Viagem
+              </button>
+            )}
           </div>
         )}
       </div>
 
-      {/* Modais de Operação */}
-      {showGross && (
-        <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-6">
-          <div className="bg-zinc-900 w-full max-w-sm rounded-[2.5rem] p-10 space-y-6 border border-white/10 shadow-2xl">
-            <div className="text-center space-y-1">
-              <h2 className="text-2xl font-black uppercase italic text-outline">Check-out Corrida</h2>
-              <p className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest">Resumo de custos da atividade</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-               <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                  <p className="text-[7px] font-bold text-zinc-500 uppercase">Deslocamento</p>
-                  <p className="text-xs font-black text-white">{kms.kmDeslocamento.toFixed(1)} KM</p>
-               </div>
-               <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                  <p className="text-[7px] font-bold text-zinc-500 uppercase">Passageiro</p>
-                  <p className="text-xs font-black text-white">{kms.kmPassageiro.toFixed(1)} KM</p>
-               </div>
-            </div>
-
-            <div className="bg-emerald-600/10 p-4 rounded-2xl border border-emerald-500/20 flex items-center justify-between">
-               <div className="flex items-center gap-2">
-                  <Fuel size={14} className="text-emerald-500" />
-                  <p className="text-[9px] font-black text-emerald-500 uppercase">Custo Combustível</p>
-               </div>
-               <p className="text-lg font-black italic text-emerald-500">R$ {estimatedFuelCost.toFixed(2)}</p>
-            </div>
-
-            <div className="space-y-1">
-               <label className="text-[9px] font-bold text-zinc-500 uppercase ml-1">Valor Bruto Recebido</label>
-               <input autoFocus type="number" step="0.01" className="w-full py-6 text-5xl font-black text-center" placeholder="0.00" value={grossInput} onChange={e => setGrossInput(e.target.value)} />
-            </div>
-
-            <button onClick={() => { onFinishRace(parseFloat(grossInput) || 0); setGrossInput(''); setShowGross(false); }} className="w-full bg-white text-black py-6 rounded-2xl font-black text-xl uppercase italic shadow-xl active:scale-95 transition-all">Lançar & Continuar</button>
-            <button onClick={() => setShowGross(false)} className="w-full text-zinc-600 font-bold uppercase text-[10px]">Cancelar</button>
-          </div>
-        </div>
-      )}
-
-      {showStart && (
-        <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-6 overflow-y-auto">
-          <div className="bg-zinc-900 w-full max-w-sm rounded-[2.5rem] p-8 space-y-6 border border-white/10 shadow-2xl my-auto">
-            <h2 className="text-2xl font-black uppercase italic text-center text-outline">Abrir Expediente</h2>
-            
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-zinc-500 uppercase ml-1">Odômetro Atual (Painel)</label>
-                <input autoFocus type="number" className="w-full text-center text-3xl font-black italic py-3" placeholder={user.lastOdometer.toString()} value={startOdo} onChange={e => setStartOdo(e.target.value)} />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                 <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-zinc-500 uppercase ml-1">App Hoje</label>
-                    <input className="w-full text-center text-sm font-black" placeholder={user.appName} value={shiftAppName} onChange={e => setShiftAppName(e.target.value)} />
-                 </div>
-                 <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-zinc-500 uppercase ml-1">Taxa (%)</label>
-                    <input type="number" className="w-full text-center text-sm font-black" placeholder={user.appPercentage.toString()} value={shiftAppPercent} onChange={e => setShiftAppPercent(e.target.value)} />
-                 </div>
-              </div>
-
-              <div className="flex items-center justify-between bg-black/40 p-4 rounded-2xl border border-white/5">
-                <span className="text-[10px] font-black uppercase text-white italic">Tarifa Fixa?</span>
-                <input type="checkbox" className="w-6 h-6 accent-white" checked={useFixed} onChange={e => setUseFixed(e.target.checked)} />
-              </div>
-
-              {useFixed && (
-                <div className="space-y-1 animate-in fade-in slide-in-from-top-2">
-                  <label className="text-[9px] font-bold text-zinc-500 uppercase ml-1">Valor/Corrida (R$)</label>
-                  <input type="number" className="w-full text-center text-xl font-black" placeholder={user.fixedFareValue.toString()} value={fixedVal} onChange={e => setFixedVal(e.target.value)} />
-                </div>
-              )}
-            </div>
-
-            <button 
-              disabled={!startOdo && !user.lastOdometer} 
-              onClick={() => { 
-                onStartShift(parseFloat(startOdo) || user.lastOdometer, { 
-                  appName: shiftAppName || user.appName, 
-                  appPercentage: parseFloat(shiftAppPercent) || user.appPercentage, 
-                  useFixed, 
-                  fixedVal: parseFloat(fixedVal) || user.fixedFareValue 
-                }); 
-                setShowStart(false); 
-              }} 
-              className="w-full bg-white text-black py-5 rounded-2xl font-black text-lg uppercase italic shadow-xl active:scale-95 transition-all"
-            >
-              Começar Agora
-            </button>
-            <button onClick={() => setShowStart(false)} className="w-full text-zinc-600 font-bold uppercase text-[10px]">Cancelar</button>
-          </div>
-        </div>
-      )}
-
-      {showEnd && (
-        <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-6 text-center">
-          <div className="bg-zinc-900 w-full max-w-sm rounded-[2.5rem] p-10 space-y-8 border border-white/10 shadow-2xl">
-            <h2 className="text-2xl font-black uppercase italic text-outline">Km Final (Painel)</h2>
-            <input autoFocus type="number" className="w-full py-6 text-4xl font-black text-center" placeholder="Ex: 045450" value={endOdo} onChange={e => setEndOdo(e.target.value)} />
-            <button onClick={() => { if(!endOdo) return; onFinishSession(user.lastOdometer, parseFloat(endOdo)); setShowEnd(false); setEndOdo(''); }} className="w-full bg-white text-black py-5 rounded-2xl font-black text-lg uppercase italic shadow-xl">Fechar Dia</button>
-            <button onClick={() => setShowEnd(false)} className="text-[10px] font-bold text-zinc-600 uppercase">Voltar</button>
-          </div>
-        </div>
-      )}
-
-      {/* Histórico Atividade Hoje */}
-      <div className="space-y-3 pb-24">
-        <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest px-1 text-outline-sm">Corridas Hoje</h3>
-        <div className="space-y-2">
-          {currentRaces.length === 0 ? (
-            <div className="py-10 text-center text-zinc-800 text-[10px] font-black uppercase border border-dashed border-zinc-900 rounded-3xl bg-black/5">Aguardando Atividade</div>
-          ) : (
-            currentRaces.slice().reverse().map(race => (
-              <div key={race.id} onClick={() => setExpandedId(expandedId === race.id ? null : race.id)} className="glass-card overflow-hidden cursor-pointer border border-white/5 active:scale-[0.99] transition-all">
-                <div className="p-4 flex items-center justify-between">
-                   <div className="flex items-center gap-4">
-                      <div className="text-center">
-                         <p className="text-[7px] font-bold text-zinc-500 uppercase leading-none mb-1 text-outline-sm">HORA</p>
-                         <p className="text-[9px] font-black text-white text-outline-sm">{formatTime(race.finishedAt)}</p>
-                      </div>
-                      <div className="h-6 w-px bg-zinc-800" />
-                      <div className="text-center">
-                         <p className="text-[7px] font-bold text-zinc-500 uppercase leading-none mb-1 text-outline-sm">KM</p>
-                         <p className="text-[9px] font-black text-white text-outline-sm">{(race.kmDeslocamento + race.kmPassageiro).toFixed(1)}</p>
-                      </div>
-                   </div>
-                   <div className="text-right flex items-center gap-3">
+      {/* LISTA DE CORRIDAS OTIMIZADA */}
+      {currentRaces.length > 0 && (
+        <div className="space-y-3 animate-up">
+          <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest px-1">Ganhos Reais da Sessão</p>
+          <div className="space-y-3">
+            {[...currentRaces].reverse().map(race => {
+              const isExpanded = expandedRaceId === race.id;
+              const totalKm = race.kmDeslocamento + race.kmPassageiro;
+              
+              return (
+                <div key={race.id} className={`bento-card overflow-hidden border-l-4 transition-all ${isExpanded ? 'bg-slate-900 border-l-blue-500' : 'bg-slate-900/40 border-l-emerald-500 shadow-md'}`}>
+                  <div onClick={() => setExpandedRaceId(isExpanded ? null : race.id)} className="p-4 flex justify-between items-center cursor-pointer">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-blue-500 shadow-inner"><Navigation size={18} /></div>
                       <div>
-                        <p className="text-xl font-black italic text-outline leading-none text-emerald-400">R$ {race.netProfit.toFixed(2)}</p>
-                        <p className="text-[7px] font-bold text-zinc-500 uppercase mt-1">Líquido</p>
+                        <p className="text-xs font-black text-white uppercase italic">{race.appName}</p>
+                        <p className="text-[8px] font-bold text-slate-500 uppercase mt-1">{totalKm.toFixed(1)} KM • {formatTime(race.endTime)}</p>
                       </div>
-                      {expandedId === race.id ? <ChevronUp size={16} className="text-zinc-600" /> : <ChevronDown size={16} className="text-zinc-600" />}
-                   </div>
-                </div>
-
-                {expandedId === race.id && (
-                  <div className="p-4 bg-black/50 border-t border-white/5 space-y-4 animate-in fade-in slide-in-from-top-1">
-                    <div className="grid grid-cols-2 gap-3">
-                       <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                          <p className="text-[8px] font-bold text-zinc-500 uppercase mb-1">Bruto</p>
-                          <p className="text-xs font-black text-white">R$ {race.grossEarnings.toFixed(2)}</p>
-                       </div>
-                       <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                          <p className="text-[8px] font-bold text-zinc-500 uppercase mb-1">Deslocamento</p>
-                          <p className="text-xs font-black text-white">{race.kmDeslocamento.toFixed(1)} KM</p>
-                       </div>
                     </div>
-                    <div className="bg-zinc-900/50 p-3 rounded-xl space-y-2 border border-white/5">
-                       <p className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest">Deduções Reais</p>
-                       <div className="flex justify-between text-[10px]"><span className="text-zinc-500">Taxa App</span><span className="text-red-400 font-bold">- R$ {race.appTax.toFixed(2)}</span></div>
-                       <div className="flex justify-between text-[10px]"><span className="text-zinc-500">Combustível</span><span className="text-red-400 font-bold">- R$ {race.fuelCost.toFixed(2)}</span></div>
-                       <div className="flex justify-between text-[10px]"><span className="text-zinc-500">Reserva Manut.</span><span className="text-red-400 font-bold">- R$ {race.maintenanceReserve.toFixed(2)}</span></div>
+                    <div className="text-right flex items-center gap-3">
+                      <div>
+                        <p className="text-sm font-black text-emerald-400 italic">R$ {race.netProfit.toFixed(2)}</p>
+                        <p className="text-[7px] font-bold text-slate-600 uppercase">Lucro Limpo</p>
+                      </div>
+                      <ChevronDown size={14} className={`text-slate-700 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                     </div>
                   </div>
-                )}
-              </div>
-            ))
-          )}
+
+                  {isExpanded && (
+                    <div className="px-4 pb-5 space-y-4 animate-up border-t border-white/5 pt-4">
+                      <div className="bg-slate-950/60 rounded-2xl p-4 space-y-2 border border-white/5">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] font-black text-slate-500 uppercase">Valor Bruto</span>
+                          <span className="text-sm font-black text-white italic">R$ {race.grossEarnings.toFixed(2)}</span>
+                        </div>
+                        <div className="h-px bg-white/5 my-1" />
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] font-black text-rose-500 uppercase flex items-center gap-1"><Trash2 size={8}/> Taxa do App</span>
+                          <span className="text-[11px] font-black text-rose-400">- R$ {race.appTax.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] font-black text-rose-500 uppercase flex items-center gap-1"><Fuel size={8}/> Combustível</span>
+                          <span className="text-[11px] font-black text-rose-400">- R$ {race.fuelCost.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <div className="flex flex-col">
+                            <span className="text-[9px] font-black text-rose-500 uppercase flex items-center gap-1"><Gauge size={8}/> Reserva Mecânica</span>
+                            {totalKm === 0 && <span className="text-[6px] font-bold text-slate-600 uppercase ml-3 italic">Taxa: R$ {currentMaintRate.toFixed(3)}/KM</span>}
+                          </div>
+                          <span className="text-[11px] font-black text-rose-400">- R$ {race.maintReserve.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] font-black text-rose-500 uppercase flex items-center gap-1"><UserCircle size={8}/> Reserva Pessoal</span>
+                          <span className="text-[11px] font-black text-rose-400">- R$ {race.personalReserve.toFixed(2)}</span>
+                        </div>
+                        <div className="h-px bg-white/5 my-1" />
+                        <div className="flex justify-between items-center pt-1">
+                          <span className="text-[10px] font-black text-emerald-500 uppercase italic">Seu Lucro (Limpo)</span>
+                          <span className="text-xl font-black text-emerald-400 italic">R$ {race.netProfit.toFixed(2)}</span>
+                        </div>
+                      </div>
+                      <button onClick={() => onRemoveRace(race.id)} className="w-full py-3 bg-rose-900/10 text-rose-500 rounded-xl font-black uppercase text-[8px] tracking-[0.2em] border border-rose-500/10">Apagar Registro</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* MODAL FECHAMENTO DE CORRIDA */}
+      {showGross && (
+        <div className="fixed inset-0 bg-slate-950/98 backdrop-blur-3xl z-[200] flex items-center justify-center p-6">
+          <div className="w-full max-w-sm p-8 bg-slate-900 border border-white/10 rounded-[3rem] shadow-2xl space-y-6 animate-up">
+            <div className="text-center">
+               <h2 className="text-2xl font-black italic uppercase text-white tracking-tighter">
+                 {selectedApp?.isFixedGross ? 'Confirmar Ganhos' : 'Finalizar Viagem'}
+               </h2>
+               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-1">App: {selectedApp?.name} • Taxa: {selectedApp?.taxPercentage}%</p>
+            </div>
+            
+            <div className="space-y-4">
+               <div className="relative">
+                  <input autoFocus type="number" step="0.01" className="w-full py-10 text-6xl font-black text-center !text-white !bg-slate-950 border-2 border-blue-500/20" placeholder="0,00" value={grossInput} onChange={e => setGrossInput(e.target.value)} />
+               </div>
+               
+               <div className="bg-slate-950 p-5 rounded-3xl border border-white/5 text-center flex flex-col items-center gap-1">
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest flex items-center justify-center gap-2">
+                    <Navigation size={14} className="text-blue-500"/> GPS: {totalCurrentKm.toFixed(2)} KM
+                  </p>
+                  {totalCurrentKm === 0 && (
+                    <p className="text-[7px] font-bold text-amber-500 uppercase italic">KM zerado não gera reserva mecânica.</p>
+                  )}
+               </div>
+            </div>
+            
+            <button onClick={() => { onFinishRace(parseFloat(grossInput) || 0); setShowGross(false); }} className="w-full bg-emerald-600 text-white py-7 rounded-[2rem] font-black text-xl uppercase italic border-b-8 border-emerald-800 shadow-xl transition-all active:scale-95">
+              Confirmar & Finalizar
+            </button>
+            <button onClick={() => setShowGross(false)} className="text-[10px] font-black text-slate-600 uppercase tracking-widest text-center py-2 w-full">Voltar</button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL HODÔMETRO */}
+      {showOdo && (
+        <div className="fixed inset-0 bg-slate-950/98 z-[210] flex items-center justify-center p-6">
+          <div className="w-full max-w-sm p-8 bg-slate-900 border border-white/10 rounded-[3rem] space-y-6 animate-up shadow-2xl">
+            <h2 className="text-xl font-black uppercase italic text-white tracking-tighter text-center">KM do Veículo</h2>
+            <input autoFocus type="number" className="w-full py-12 text-5xl font-black text-center !bg-slate-950 !text-white" placeholder="000000" value={odoInput} onChange={e => setOdoInput(e.target.value)} />
+            <button onClick={() => { 
+              const val = parseFloat(odoInput);
+              if(phase === 'IDLE') { setPhase('ON_SHIFT'); onUpdateUser({...user, lastOdometer: val}); } 
+              else { onFinishShift(val); } 
+              setShowOdo(false); 
+            }} className="w-full bg-blue-600 text-white py-6 rounded-[2rem] font-black text-xl uppercase italic border-b-4 border-blue-800 shadow-xl active:scale-95">Confirmar</button>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIGURAÇÃO DE APPS */}
+      {showAppConfig && (
+        <div className="fixed inset-0 bg-slate-950/98 backdrop-blur-2xl z-[200] flex items-center justify-center p-6 overflow-y-auto">
+          <div className="w-full max-w-sm p-8 bg-slate-900 border border-white/10 rounded-[3rem] shadow-2xl space-y-5 animate-up">
+            <h2 className="text-xl font-black italic uppercase text-white tracking-tighter text-center">Gestão de Apps</h2>
+            
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                 {user.appProfiles.map(p => (
+                   <div key={p.id} className="flex gap-2">
+                      <button onClick={() => onUpdateUser({...user, selectedAppProfileId: p.id})} className={`flex-1 p-4 rounded-2xl border flex justify-between items-center transition-all ${user.selectedAppProfileId === p.id ? 'bg-blue-600 border-blue-400 text-white shadow-lg' : 'bg-slate-950 border-white/5 text-slate-500'}`}>
+                          <span className="font-black uppercase italic text-xs">{p.name}</span>
+                          <span className="text-[10px] font-bold opacity-70">{p.taxPercentage}%</span>
+                      </button>
+                      <button onClick={() => onUpdateUser({...user, appProfiles: user.appProfiles.filter(x => x.id !== p.id)})} className="p-4 bg-rose-900/20 text-rose-500 rounded-2xl border border-white/5"><Trash2 size={16}/></button>
+                   </div>
+                 ))}
+            </div>
+
+            <div className="pt-4 border-t border-white/5 space-y-3 bg-slate-950/50 p-5 rounded-3xl">
+              <input className="w-full !text-xs !py-3.5" placeholder="Nome (Ex: Uber, 99, Particular)" value={newApp.name} onChange={e => setNewApp({...newApp, name: e.target.value})} />
+              <div className="space-y-2">
+                <label className="text-[8px] font-black text-blue-500 uppercase tracking-widest ml-1">Comissão App (%)</label>
+                <input className="w-full !text-xs !py-3.5 text-center" type="number" placeholder="Ex: 12" value={newApp.tax} onChange={e => setNewApp({...newApp, tax: e.target.value})} />
+              </div>
+              <div className="flex bg-slate-900 p-1 rounded-2xl border border-white/5">
+                <button onClick={() => setNewApp({...newApp, isFixed: !newApp.isFixed})} className={`flex-1 py-2.5 rounded-xl font-black text-[9px] uppercase transition-all ${newApp.isFixed ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>Valor Bruto Fixo?</button>
+              </div>
+              {newApp.isFixed && (
+                <div className="space-y-2">
+                  <label className="text-[8px] font-black text-blue-500 uppercase tracking-widest ml-1">Ganho Fixo (R$)</label>
+                  <input className="w-full !py-3.5 !text-center !text-xs" type="number" placeholder="Ex: 15.00" value={newApp.fixedVal} onChange={e => setNewApp({...newApp, fixedVal: e.target.value})} />
+                </div>
+              )}
+              <button onClick={() => {
+                if(!newApp.name) return;
+                const p: AppProfile = { 
+                  id: Date.now().toString(), 
+                  name: newApp.name, 
+                  taxPercentage: parseFloat(newApp.tax) || 0, 
+                  isFixedGross: newApp.isFixed, 
+                  fixedGrossValue: parseFloat(newApp.fixedVal) || 0 
+                };
+                onUpdateUser({ ...user, appProfiles: [...user.appProfiles, p], selectedAppProfileId: p.id });
+                setNewApp({ name: '', tax: '12', isFixed: false, fixedVal: '15.00' });
+              }} className="w-full bg-blue-600/10 text-blue-500 font-black text-[10px] py-4 rounded-xl border border-blue-500/20 uppercase">Salvar Novo App</button>
+            </div>
+            
+            <button onClick={() => { if(!selectedApp) return alert("Selecione um App"); setShowAppConfig(false); setOdoInput(''); setShowOdo(true); }} className="w-full bg-blue-600 text-white py-6 rounded-[2rem] font-black text-lg uppercase italic shadow-2xl border-b-4 border-blue-800">Confirmar & Iniciar Turno</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
-
 export default Home;

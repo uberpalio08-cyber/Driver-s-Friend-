@@ -13,50 +13,53 @@ interface Props {
 const Landing: React.FC<Props> = ({ user, onStart, onSelect, onNewRegistration }) => {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-10 bg-transparent text-white overflow-hidden relative">
-      <div className="z-10 text-center mb-16 space-y-8">
-        <div className="w-28 h-28 bg-white rounded-[2.5rem] mx-auto flex items-center justify-center shadow-[0_20px_50px_rgba(255,255,255,0.2)] animate-float border-2 border-black">
-          <Car size={56} className="text-black" />
+      <div className="z-10 text-center mb-16 space-y-8 animate-entrance">
+        <div className="w-32 h-32 bg-white rounded-[3rem] mx-auto flex items-center justify-center shadow-[0_20px_60px_rgba(59,130,246,0.3)] border-2 border-black relative">
+          <div className="absolute inset-0 bg-blue-500/10 rounded-[3rem] animate-pulse"></div>
+          <Car size={64} className="text-black relative z-10" />
         </div>
         <div className="space-y-2">
-          <h1 className="text-5xl font-black tracking-tighter uppercase italic leading-none text-outline drop-shadow-xl">Driver's Friend</h1>
-          <p className="text-zinc-400 font-bold uppercase tracking-[0.4em] text-[11px] text-outline-sm">Intelligence System</p>
+          <h1 className="text-5xl font-black tracking-tighter uppercase italic leading-none drop-shadow-2xl">
+            Driver's <span className="text-blue-500">Friend</span>
+          </h1>
+          <p className="text-zinc-500 font-black uppercase tracking-[0.4em] text-[10px]">Intelligence System</p>
         </div>
       </div>
 
-      <div className="z-10 w-full space-y-6">
+      <div className="z-10 w-full space-y-6 animate-entrance" style={{ animationDelay: '0.2s' }}>
         {!user ? (
           <button 
             onClick={onStart}
-            className="w-full group transition-transform active:scale-95"
+            className="w-full group transition-all active:scale-95"
           >
-            <div className="bg-white p-10 rounded-[3rem] shadow-2xl flex flex-col items-center gap-4 border-2 border-black">
+            <div className="bg-white p-10 rounded-[3.5rem] shadow-2xl flex flex-col items-center gap-4 border-2 border-black hover:bg-zinc-50">
               <h2 className="text-2xl font-black text-black uppercase flex items-center gap-3 italic">
-                COMEÇAR <ArrowRight className="text-black group-hover:translate-x-1 transition-transform" size={24} />
+                COMEÇAR <ArrowRight className="text-black group-hover:translate-x-2 transition-transform" size={28} />
               </h2>
-              <p className="text-zinc-600 text-[10px] font-black uppercase tracking-widest">Controle total do seu lucro</p>
+              <p className="text-zinc-600 text-[10px] font-black uppercase tracking-widest">Gestão Profissional de Custos</p>
             </div>
           </button>
         ) : (
           <>
             <button 
               onClick={onSelect}
-              className="w-full transition-transform active:scale-95"
+              className="w-full transition-all active:scale-95"
             >
-              <div className="bg-white border-2 border-black p-8 rounded-[3rem] shadow-2xl flex items-center gap-6">
-                <div className="bg-black p-4 rounded-2xl text-white">
-                  <UserCircle size={32} />
+              <div className="bg-white border-2 border-black p-8 rounded-[3.5rem] shadow-2xl flex items-center gap-6">
+                <div className="bg-blue-600 p-4 rounded-2xl text-white shadow-lg">
+                  <UserCircle size={36} />
                 </div>
                 <div className="text-left">
                   <p className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em]">Bem-vindo de volta</p>
-                  <h2 className="text-2xl font-black text-black uppercase italic">{user.name}</h2>
-                  <p className="text-[10px] font-bold text-zinc-600">{user.car.model}</p>
+                  <h2 className="text-2xl font-black text-black uppercase italic leading-none">{user.name}</h2>
+                  <p className="text-[10px] font-bold text-zinc-600 mt-1">{user.car.model}</p>
                 </div>
               </div>
             </button>
 
             <button 
               onClick={onNewRegistration}
-              className="w-full py-4 text-white/60 hover:text-white transition-colors text-[10px] font-black uppercase tracking-widest underline underline-offset-4"
+              className="w-full py-4 text-white/40 hover:text-white transition-colors text-[10px] font-black uppercase tracking-widest underline underline-offset-4"
             >
               Excluir dados e recomeçar
             </button>
@@ -64,7 +67,7 @@ const Landing: React.FC<Props> = ({ user, onStart, onSelect, onNewRegistration }
         )}
       </div>
       
-      <p className="absolute bottom-10 text-white/40 text-[8px] uppercase font-black tracking-[0.5em]">Professional Tool v2.2</p>
+      <p className="absolute bottom-10 text-white/20 text-[8px] uppercase font-black tracking-[0.6em]">Professional Tool v2.5 • Native Engine</p>
     </div>
   );
 };

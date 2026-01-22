@@ -1,233 +1,131 @@
 
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
-import { User, Car, ArrowRight, Loader2, Target, Sparkles, Activity } from 'lucide-react';
-import { GoogleGenAI, Type } from "@google/genai";
+import { User, Car, Target, ArrowRight, Loader2, Sparkles, Zap } from 'lucide-react';
+import { GoogleGenAI } from "@google/genai";
 
 interface Props {
-  onComplete: (profile: UserProfile) => void;
   ai: GoogleGenAI;
+  onComplete: (u: UserProfile) => void;
 }
 
-const Onboarding: React.FC<Props> = ({ onComplete, ai }) => {
+const Onboarding: React.FC<Props> = ({ ai, onComplete }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [detecting, setDetecting] = useState(false);
-  const [name, setName] = useState('');
-  
-  const [carData, setCarData] = useState({
-    brand: '',
-    model: '',
-    year: '',
-    power: '',
-    tankCapacity: '',
-    initialOdometer: '',
-    appPercentage: '',
-    appName: '',
-    maintenanceReserve: '',
-    emergencyReserve: '',
-    desiredSalary: '',
-    personalFixedCosts: '',
-    workingDays: '',
-    avgConsumption: '',
-    useFixedFare: false,
-    fixedFareValue: '',
-    suggestedGoal: ''
+  const [data, setData] = useState({
+    name: '', brand: '', model: '', year: '', power: '1.0', tank: '',
+    salary: '', costs: '', days: '22'
   });
 
-  const autoFillVehicleData = async () => {
-    if (!carData.brand || !carData.model || !carData.year) {
-      alert("Informe marca, modelo e ano.");
-      return;
-    }
-    setDetecting(true);
-    try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Retorne em JSON as especificações de um ${carData.brand} ${carData.model} ${carData.year} ${carData.power || ""}: 'tankCapacity' (number, em litros) e 'avgConsumption' (number, km/l urbano).`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              tankCapacity: { type: Type.NUMBER },
-              avgConsumption: { type: Type.NUMBER }
-            },
-            required: ["tankCapacity", "avgConsumption"]
-          }
-        }
-      });
-      const result = JSON.parse(response.text);
-      setCarData(prev => ({
-        ...prev,
-        tankCapacity: result.tankCapacity?.toString() || prev.tankCapacity,
-        avgConsumption: result.avgConsumption?.toString() || prev.avgConsumption
-      }));
-    } catch (e) {
-      alert("A IA não conseguiu identificar os valores. Insira manualmente.");
-    } finally {
-      setDetecting(false);
-    }
-  };
-
-  const generateSmartGoal = async () => {
-    if (!carData.desiredSalary || !carData.workingDays) {
-       alert("Preencha o salário e dias primeiro.");
-       return;
-    }
-    setDetecting(true);
-    try {
-      const prompt = `Sugira a meta de LUCRO LÍQUIDO diária para um motorista que quer R$ ${carData.desiredSalary} de lucro e tem R$ ${carData.personalFixedCosts || 0} de custos fixos, trabalhando ${carData.workingDays} dias. Retorne apenas o número da meta líquida diária ideal.`;
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt
-      });
-      const goal = response.text.replace(/[^0-9.]/g, '');
-      setCarData(prev => ({ ...prev, suggestedGoal: goal }));
-    } catch (e) {
-      alert("Erro ao sugerir meta.");
-    } finally {
-      setDetecting(false);
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (step < 3) {
-      setStep(step + 1);
-      return;
-    }
+  const fetchTankCapacity = async () => {
+    if (!data.brand || !data.model) return alert("Preencha Marca e Modelo.");
     setLoading(true);
-
-    const profile: UserProfile = {
-      name: name.trim(),
-      appName: carData.appName || 'Uber',
-      appPercentage: parseFloat(carData.appPercentage) || 25,
-      maintenanceReservePercent: parseFloat(carData.maintenanceReserve) || 5,
-      emergencyReservePercent: parseFloat(carData.emergencyReserve) || 3,
-      desiredSalary: parseFloat(carData.desiredSalary) || 3000,
-      personalFixedCosts: parseFloat(carData.personalFixedCosts) || 0,
-      workingDaysPerMonth: parseFloat(carData.workingDays) || 22,
-      dailyGoal: parseFloat(carData.suggestedGoal) || 150,
-      currentFuelLevel: 0, 
-      lastOdometer: parseFloat(carData.initialOdometer) || 0,
-      calculatedAvgConsumption: parseFloat(carData.avgConsumption) || 10, 
-      useFixedFare: carData.useFixedFare,
-      fixedFareValue: parseFloat(carData.fixedFareValue) || 0,
-      car: {
-        brand: carData.brand,
-        model: carData.model,
-        year: carData.year,
-        power: carData.power,
-        tankCapacity: parseFloat(carData.tankCapacity) || 50
-      }
-    };
-
-    onComplete(profile);
+    try {
+      const resp = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `JSON: Capacidade exata do tanque de combustível em litros para o veículo ${data.brand} ${data.model} ${data.year}. FORMATO: {"liters": number}`,
+        config: { responseMimeType: "application/json" }
+      });
+      const res = JSON.parse(resp.text);
+      setData(p => ({ ...p, tank: res.liters?.toString() || '' }));
+    } catch (e) { alert("IA indisponível. Preencha manualmente."); }
+    finally { setLoading(false); }
   };
 
-  const inputClass = "w-full bg-zinc-50 border-2 border-zinc-200 rounded-2xl px-5 py-4 focus:outline-none focus:border-black transition-all text-black font-bold text-lg leading-tight";
-  const labelClass = "text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1 mb-1.5 block min-h-[1.2em]";
+  const calculateDailyGoal = () => {
+    const s = parseFloat(data.salary) || 0;
+    const c = parseFloat(data.costs) || 0;
+    const d = parseFloat(data.days) || 1;
+    // Sugestão de Meta Bruta Diária: Meta Líquida / 0.55 (considerando aprox 45% de gastos operacionais médios)
+    return Math.round(((s + c) / d) / 0.55);
+  };
+
+  const next = () => { if (step < 3) setStep(step + 1); else finish(); };
+  const finish = () => {
+    onComplete({
+      name: data.name, currentFuelLevel: 0, lastOdometer: 0, calculatedAvgConsumption: 10, maintenanceCostPerKm: 0.15,
+      car: { brand: data.brand, model: data.model, year: data.year, power: data.power, tankCapacity: parseFloat(data.tank) || 50 },
+      desiredSalary: parseFloat(data.salary), personalFixedCosts: parseFloat(data.costs), workingDaysPerMonth: parseInt(data.days),
+      dailyGoal: calculateDailyGoal(), appProfiles: [], selectedAppProfileId: '', stationProfiles: []
+    });
+  };
+
+  const inputStyle = "w-full bg-slate-900 border border-slate-800 rounded-2xl px-4 py-3.5 text-white font-bold text-sm focus:border-blue-500 outline-none transition-all";
+  const labelStyle = "text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block ml-1";
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-sm space-y-8 bg-white/95 p-8 rounded-[3.5rem] shadow-2xl border border-white">
+    <div className="min-h-screen flex items-center justify-center py-10 animate-up px-4">
+      <div className="w-full max-w-sm space-y-8">
         <div className="text-center space-y-2">
-          <div className="w-16 h-16 bg-black rounded-2xl mx-auto flex items-center justify-center shadow-xl">
-            {step === 1 ? <User className="text-white" size={28} /> : step === 2 ? <Car className="text-white" size={28} /> : <Target className="text-white" size={28} />}
+          <div className="w-16 h-16 bg-blue-600 rounded-2xl mx-auto flex items-center justify-center text-white shadow-xl border-b-4 border-blue-800">
+            {step === 1 ? <User size={30} /> : step === 2 ? <Car size={30} /> : <Target size={30} />}
           </div>
-          <h1 className="text-xl font-black text-black tracking-tighter uppercase italic">Cadastro</h1>
+          <h1 className="text-2xl font-black italic uppercase tracking-tighter">
+            {step === 1 ? 'Como se chama?' : step === 2 ? 'Seu Veículo' : 'Sua Meta Diária'}
+          </h1>
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest opacity-60">Passo {step} de 3</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-5">
           {step === 1 && (
-            <div className="space-y-4">
-              <div>
-                <label className={labelClass}>Nome Completo</label>
-                <input required className={inputClass} placeholder="Ex: João Silva" value={name} onChange={e => setName(e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-3 items-end">
-                <div>
-                  <label className={labelClass}>App Principal</label>
-                  <input required className={inputClass} placeholder="Uber" value={carData.appName} onChange={e => setCarData({...carData, appName: e.target.value})} />
-                </div>
-                <div>
-                  <label className={labelClass}>Taxa (%)</label>
-                  <input required type="number" className={inputClass} placeholder="25" value={carData.appPercentage} onChange={e => setCarData({...carData, appPercentage: e.target.value})} />
-                </div>
-              </div>
+            <div className="animate-up">
+              <label className={labelStyle}>Seu Nome</label>
+              <input className={inputStyle} value={data.name} onChange={e => setData({...data, name: e.target.value})} placeholder="Ex: Rodrigo" />
             </div>
           )}
 
           {step === 2 && (
-            <div className="space-y-4">
+            <div className="space-y-4 animate-up">
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelClass}>Marca</label>
-                  <input required className={inputClass} placeholder="Toyota" value={carData.brand} onChange={e => setCarData({...carData, brand: e.target.value})} />
-                </div>
-                <div>
-                  <label className={labelClass}>Modelo</label>
-                  <input required className={inputClass} placeholder="Corolla" value={carData.model} onChange={e => setCarData({...carData, model: e.target.value})} />
-                </div>
+                <div><label className={labelStyle}>Marca</label><input className={inputStyle} value={data.brand} onChange={e => setData({...data, brand: e.target.value})} placeholder="Toyota" /></div>
+                <div><label className={labelStyle}>Modelo</label><input className={inputStyle} value={data.model} onChange={e => setData({...data, model: e.target.value})} placeholder="Corolla" /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
+                <div><label className={labelStyle}>Ano</label><input className={inputStyle} value={data.year} onChange={e => setData({...data, year: e.target.value})} placeholder="2024" /></div>
                 <div>
-                  <label className={labelClass}>Ano</label>
-                  <input required type="number" className={inputClass} placeholder="2022" value={carData.year} onChange={e => setCarData({...carData, year: e.target.value})} />
-                </div>
-                <div>
-                  <label className={labelClass}>Motor</label>
-                  <input required className={inputClass} placeholder="1.8" value={carData.power} onChange={e => setCarData({...carData, power: e.target.value})} />
+                  <label className={labelStyle}>Motor</label>
+                  <select className={inputStyle} value={data.power} onChange={e => setData({...data, power: e.target.value})}>
+                    <option value="1.0">1.0</option>
+                    <option value="1.6">1.6</option>
+                    <option value="2.0">2.0</option>
+                  </select>
                 </div>
               </div>
-              <button type="button" onClick={autoFillVehicleData} disabled={detecting} className="w-full bg-zinc-900 text-white p-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest">
-                {detecting ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Identificar com IA
-              </button>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelClass}>Tanque (L)</label>
-                  <input required type="number" className={inputClass} placeholder="50" value={carData.tankCapacity} onChange={e => setCarData({...carData, tankCapacity: e.target.value})} />
-                </div>
-                <div>
-                  <label className={labelClass}>Consumo Urbano</label>
-                  <input required type="number" step="0.1" className={inputClass} placeholder="10.5" value={carData.avgConsumption} onChange={e => setCarData({...carData, avgConsumption: e.target.value})} />
+              <div>
+                <label className={labelStyle}>Tanque (Litros)</label>
+                <div className="relative">
+                  <input className={inputStyle} type="number" value={data.tank} onChange={e => setData({...data, tank: e.target.value})} placeholder="Capacidade em L" />
+                  <button onClick={fetchTankCapacity} disabled={loading} className="absolute right-2 top-2 bottom-2 bg-blue-600/20 text-blue-400 px-3 rounded-xl flex items-center gap-1.5 text-[9px] font-black uppercase border border-blue-500/10">
+                    {loading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} IA Tank
+                  </button>
                 </div>
               </div>
             </div>
           )}
 
           {step === 3 && (
-            <div className="space-y-4">
-              <div className="bg-zinc-50 p-6 rounded-[2.5rem] border-2 border-zinc-100 space-y-2">
-                 <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-black text-zinc-900 uppercase">Meta Diária (Líquido)</p>
-                    <button type="button" onClick={generateSmartGoal} disabled={detecting} className="text-black"><Activity size={16} /></button>
-                 </div>
-                 <input type="number" className="w-full bg-transparent text-4xl font-black italic text-center outline-none" placeholder="0" value={carData.suggestedGoal} onChange={e => setCarData({...carData, suggestedGoal: e.target.value})} />
-                 <p className="text-[8px] text-zinc-400 font-black uppercase text-center tracking-widest">Este é o valor que sobrará após todos os custos</p>
-              </div>
+            <div className="space-y-4 animate-up">
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelClass}>Salário Limpo</label>
-                  <input required type="number" className={inputClass} placeholder="Ex: 3000" value={carData.desiredSalary} onChange={e => setCarData({...carData, desiredSalary: e.target.value})} />
-                </div>
-                <div>
-                  <label className={labelClass}>Dias p/ Mês</label>
-                  <input required type="number" className={inputClass} placeholder="Ex: 22" value={carData.workingDays} onChange={e => setCarData({...carData, workingDays: e.target.value})} />
-                </div>
+                <div><label className={labelStyle}>Salário Livre/Mês</label><input className={inputStyle} type="number" value={data.salary} onChange={e => setData({...data, salary: e.target.value})} placeholder="4000" /></div>
+                <div><label className={labelStyle}>Custos Pessoais</label><input className={inputStyle} type="number" value={data.costs} onChange={e => setData({...data, costs: e.target.value})} placeholder="1500" /></div>
               </div>
-              <div>
-                <label className={labelClass}>Custos Fixos Pessoais</label>
-                <input required type="number" className={inputClass} placeholder="Ex: 1000" value={carData.personalFixedCosts} onChange={e => setCarData({...carData, personalFixedCosts: e.target.value})} />
+              <div><label className={labelStyle}>Dias Trabalhados/Mês</label><input className={inputStyle} type="number" value={data.days} onChange={e => setData({...data, days: e.target.value})} placeholder="22" /></div>
+              
+              <div className="bento-card p-5 bg-blue-600/5 border-blue-500/20">
+                <div className="flex items-center gap-3 mb-2">
+                  <Zap size={16} className="text-blue-500" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">Meta Sugerida</span>
+                </div>
+                <p className="text-3xl font-black italic text-white tracking-tighter leading-none">R$ {calculateDailyGoal()}</p>
+                <p className="text-[8px] font-bold text-slate-500 uppercase mt-2">Faturamento bruto diário para cobrir tudo.</p>
               </div>
             </div>
           )}
 
-          <button type="submit" className="w-full bg-black text-white font-black py-6 rounded-[2rem] shadow-2xl flex items-center justify-center gap-3 uppercase italic text-lg active:scale-[0.98] transition-all">
-            {step < 3 ? 'Próximo' : 'Concluir'} <ArrowRight size={20} />
+          <button onClick={next} className="w-full bg-blue-600 text-white font-black py-4.5 rounded-2xl flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all border-b-4 border-blue-800">
+            {step < 3 ? 'Avançar' : 'Finalizar Cadastro'} <ArrowRight size={20} />
           </button>
-        </form>
+        </div>
       </div>
     </div>
   );

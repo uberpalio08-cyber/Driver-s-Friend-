@@ -1,14 +1,14 @@
 
 export type AppView = 'LANDING' | 'ONBOARDING' | 'HOME' | 'FINANCEIRO' | 'POSTOS' | 'CUSTOS' | 'VEICULO';
-export type TrackingPhase = 'IDLE' | 'PARTICULAR' | 'DESLOCAMENTO' | 'PASSAGEIRO';
+export type TrackingPhase = 'IDLE' | 'ON_SHIFT' | 'ACCEPTING' | 'BOARDING';
 export type FuelType = 'GASOLINA' | 'ETANOL';
-export type ExpenseCategory = 'ALIMENTAÇÃO' | 'ÁGUA' | 'LUZ' | 'TELEFONE' | 'OUTROS';
+export type ExpenseCategory = 'ALIMENTAÇÃO' | 'ÁGUA' | 'LUZ' | 'TELEFONE' | 'COMBUSTÍVEL' | 'MANUTENÇÃO' | 'OUTROS';
 
 export interface CarInfo {
   brand: string;
   model: string;
   year: string;
-  power: string;
+  power: string; // 1.0, 1.6, 2.0
   tankCapacity: number;
 }
 
@@ -18,7 +18,15 @@ export interface MaintenanceTask {
   lastOdo: number;
   interval: number;
   lastCost: number;
-  isAIGenerated?: boolean;
+  alertBeforeKm: number;
+}
+
+export interface AppProfile {
+  id: string;
+  name: string;
+  taxPercentage: number;     // Porcentagem que o App retira (ex: 12%)
+  isFixedGross: boolean;     // Se a corrida tem um valor bruto fixo (ex: entregas)
+  fixedGrossValue: number;   // O valor bruto fixo da corrida
 }
 
 export interface Expense {
@@ -33,26 +41,41 @@ export interface Expense {
 export interface Race {
   id: string;
   date: number;
-  acceptedAt: number;
-  finishedAt: number;
+  appName: string;
+  startTime: number;    
+  boardingTime: number; 
+  endTime: number;      
   kmDeslocamento: number;
   kmPassageiro: number;
   grossEarnings: number;
-  netProfit: number; 
-  fuelCost: number;
   appTax: number;
-  maintenanceReserve: number;
-  emergencyReserve: number;
-  score?: 'GOOD' | 'OK' | 'BAD';
+  fuelCost: number;
+  maintReserve: number;
+  personalReserve: number;
+  netProfit: number;
+}
+
+export interface StationProfile {
+  id: string;
+  name: string;
+  lastPrice: number;
+  lastFuelType: FuelType;
+}
+
+export interface RefuelEntry {
+  id: string;
+  date: number;
+  stationName: string;
+  fuelType: FuelType;
+  pricePerLiter: number;
+  amountMoney: number;
+  liters: number;
+  odometerAtRefuel: number;
 }
 
 export interface UserProfile {
   name: string;
-  appName: string;
   car: CarInfo;
-  appPercentage: number;
-  maintenanceReservePercent: number;
-  emergencyReservePercent: number;
   desiredSalary: number;
   personalFixedCosts: number;
   workingDaysPerMonth: number;
@@ -60,27 +83,9 @@ export interface UserProfile {
   currentFuelLevel: number; 
   lastOdometer: number; 
   calculatedAvgConsumption: number;
-  maintenanceCostPerKm?: number;
-  useFixedFare: boolean;
-  fixedFareValue: number;
-}
-
-export interface GasStation {
-  id: string;
-  name: string;
-  lastGasPrice?: number;
-  lastEtanolPrice?: number;
-}
-
-export interface RefuelEntry {
-  id: string;
-  date: number;
-  stationId: string;
-  fuelType: FuelType;
-  pricePerLiter: number;
-  liters: number;
-  isFullTank: boolean;
-  odometerAtRefuel: number;
+  appProfiles: AppProfile[];
+  selectedAppProfileId: string;
+  stationProfiles: StationProfile[];
 }
 
 export interface TripSession {
@@ -90,7 +95,6 @@ export interface TripSession {
   endOdometer: number;
   kmParticular: number;
   races: Race[];
-  dailyExpenses: Expense[];
   totalGross: number;
   totalNet: number;
 }
@@ -98,11 +102,9 @@ export interface TripSession {
 export interface AppState {
   user: UserProfile | null;
   sessions: TripSession[];
-  stations: GasStation[];
   refuels: RefuelEntry[];
   expenses: Expense[];
   maintenance: MaintenanceTask[];
   currentRaces: Race[];
-  currentDailyExpenses: Expense[];
   isLoaded: boolean;
 }

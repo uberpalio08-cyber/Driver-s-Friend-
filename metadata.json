@@ -1,12 +1,16 @@
 {
   "name": "Driver's Friend",
-  "short_name": "DF Friend",
-  "description": "Gerenciador profissional para motoristas. Inteligência B&W para lucro máximo.",
-  "theme_color": "#000000",
-  "background_color": "#000000",
+  "short_name": "DriversFriend",
+  "description": "Seu parceiro de lucro real e gestão de custos para motoristas de aplicativo.",
+  "theme_color": "#020617",
+  "background_color": "#020617",
   "display": "standalone",
+  "scope": "/",
+  "start_url": "/",
   "orientation": "portrait",
   "requestFramePermissions": [
-    "geolocation"
+    "geolocation",
+    "camera",
+    "microphone"
   ]
 }
