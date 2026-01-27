@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { UserProfile, AppState, AppView, TrackingPhase, Race, RefuelEntry, Expense, AppProfile, MaintenanceTask } from './types';
+import { UserProfile, AppState, AppView, TrackingPhase, Race, RefuelEntry, Expense, AppProfile, MaintenanceTask, TripSession } from './types';
 import Landing from './components/Landing';
 import Onboarding from './components/Onboarding';
 import Home from './components/Home';
@@ -8,10 +8,10 @@ import Financeiro from './components/Financeiro';
 import Postos from './components/Postos';
 import Custos from './components/Custos';
 import Veiculo from './components/Veiculo';
+import FloatingTracker from './components/FloatingTracker';
 import { LayoutDashboard, Wallet, Fuel, Receipt, Car } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
 
-const STORAGE_KEY = 'drivers_friend_pro_final_v16';
+const STORAGE_KEY = 'drivers_friend_pro_v20_final';
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
@@ -24,14 +24,23 @@ const App: React.FC = () => {
   const lastPos = useRef<GeolocationPosition | null>(null);
   const watchId = useRef<number | null>(null);
 
-  const ai = useMemo(() => new GoogleGenAI({ apiKey: process.env.API_KEY }), []);
+  useEffect(() => {
+    (window as any).AppLogic = {
+      setPhase: (p: TrackingPhase) => setPhase(p),
+      addRace: () => {
+        const event = new CustomEvent('openFinishRaceModal');
+        window.dispatchEvent(event);
+      }
+    };
+  }, []);
 
-  // CÁLCULO CONTÁBIL DINÂMICO: Custo real de manutenção por KM baseado nas tarefas da garagem
+  // CÁLCULO DE RESERVA: Soma o (Custo Estimado / Intervalo) de TODAS as tarefas da garagem
   const dynamicMaintCostPerKm = useMemo(() => {
-    if (state.maintenance.length === 0) return 0.15; // Fallback se não houver tarefas
+    if (state.maintenance.length === 0) return 0; // Se não houver nada na garagem, a reserva é 0
     return state.maintenance.reduce((acc, task) => {
-      const costPerKm = task.interval > 0 ? (task.lastCost / task.interval) : 0;
-      return acc + costPerKm;
+      // Ex: Óleo (285 / 10000 = 0,0285 por km)
+      const taskCostPerKm = task.interval > 0 ? (task.lastCost / task.interval) : 0;
+      return acc + taskCostPerKm;
     }, 0);
   }, [state.maintenance]);
 
@@ -54,7 +63,7 @@ const App: React.FC = () => {
   }, [state, phase]);
 
   useEffect(() => {
-    if (phase === 'DESLOCAMENTO' || phase === 'PASSAGEIRO') {
+    if (['DESLOCAMENTO', 'PASSAGEIRO', 'PARTICULAR'].includes(phase)) {
       watchId.current = navigator.geolocation.watchPosition(
         (pos) => {
           if (lastPos.current) {
@@ -93,18 +102,23 @@ const App: React.FC = () => {
     return R * c;
   };
 
-  const handleFinishRace = (gross: number, profile: AppProfile) => {
+  const handleFinishRace = (gross: number, profile: AppProfile, manualKm?: number) => {
     if (!state.user) return;
-    const kmOfThisRace = trackedKm;
-    const appTax = gross * (profile.taxValue / 100);
-    const fuelPrice = state.refuels[0]?.pricePerLiter || 5.85;
     
-    // Contabilidade: Custo de combustível baseado no consumo médio real
+    const kmOfThisRace = (manualKm !== undefined && manualKm > 0) ? manualKm : trackedKm;
+    
+    // 1. Taxa do App
+    const appTax = gross * (profile.taxValue / 100);
+    
+    // 2. Combustível
+    const fuelPrice = state.refuels[0]?.pricePerLiter || 5.85;
     const fuelCost = kmOfThisRace > 0 ? (kmOfThisRace / state.user.calculatedAvgConsumption) * fuelPrice : 0;
     
-    // Contabilidade: Reserva de manutenção dinâmica
+    // 3. Reserva de Manutenção (CALCULADA POR KM RODADO)
+    // Se dynamicMaintCostPerKm for 0.0285 e rodou 10km, reserva 0.285
     const maintRes = kmOfThisRace > 0 ? kmOfThisRace * dynamicMaintCostPerKm : 0;
     
+    // 4. Lucro Líquido Real = Bruto - Taxas - Combustível - Manutenção
     const net = gross - appTax - fuelCost - maintRes;
 
     const newRace: Race = {
@@ -120,35 +134,29 @@ const App: React.FC = () => {
 
   const handleStartShift = (odo: number) => {
     if (!state.user) return;
-    const isFirstRun = state.user.lastOdometer === 0;
+    const gap = odo - state.user.lastOdometer;
+    if (gap > 0 && state.user.lastOdometer !== 0) {
+      const fuelPrice = state.refuels[0]?.pricePerLiter || 5.85;
+      const fuelUsed = gap / state.user.calculatedAvgConsumption;
+      const fuelCost = fuelUsed * fuelPrice;
+      const maintCost = gap * dynamicMaintCostPerKm;
+      
+      const particularExpense: Expense = {
+        id: `p-${Date.now()}`,
+        date: Date.now(),
+        category: 'COMBUSTÍVEL',
+        description: `KM Particular (${gap.toFixed(1)}km)`,
+        amount: fuelCost + maintCost,
+        isWorkExpense: false
+      };
 
-    if (isFirstRun) {
-      setState(p => ({ ...p, user: p.user ? { ...p.user, lastOdometer: odo } : null }));
+      setState(p => ({
+        ...p,
+        expenses: [particularExpense, ...p.expenses],
+        user: p.user ? { ...p.user, lastOdometer: odo, currentFuelLevel: Math.max(0, p.user.currentFuelLevel - fuelUsed) } : null
+      }));
     } else {
-      const gap = odo - state.user.lastOdometer;
-      if (gap > 0) {
-        const fuelPrice = state.refuels[0]?.pricePerLiter || 5.85;
-        const fuelUsed = gap / state.user.calculatedAvgConsumption;
-        const fuelCost = fuelUsed * fuelPrice;
-        const maintCost = gap * dynamicMaintCostPerKm;
-        
-        const personalExpense: Expense = {
-          id: `part-${Date.now()}`,
-          date: Date.now(),
-          category: 'COMBUSTÍVEL',
-          description: `Particular (${gap.toFixed(1)}km)`,
-          amount: fuelCost + maintCost,
-          isWorkExpense: true
-        };
-
-        setState(p => ({
-          ...p,
-          expenses: [personalExpense, ...p.expenses],
-          user: p.user ? { ...p.user, lastOdometer: odo, currentFuelLevel: Math.max(0, p.user.currentFuelLevel - fuelUsed) } : null
-        }));
-      } else {
-        setState(p => ({ ...p, user: p.user ? { ...p.user, lastOdometer: odo } : null }));
-      }
+      setState(p => ({ ...p, user: p.user ? { ...p.user, lastOdometer: odo } : null }));
     }
     setPhase('ON_SHIFT');
     setTrackedKm(0);
@@ -158,7 +166,7 @@ const App: React.FC = () => {
     if (!state.user) return;
     const totalGross = state.currentRaces.reduce((acc, r) => acc + r.grossEarnings, 0);
     const totalNet = state.currentRaces.reduce((acc, r) => acc + r.netProfit, 0);
-    const session = {
+    const session: TripSession = {
       id: Date.now().toString(), date: Date.now(), startOdometer: state.user.lastOdometer,
       endOdometer: endOdo, races: [...state.currentRaces], totalGross, totalNet
     };
@@ -173,17 +181,14 @@ const App: React.FC = () => {
 
   const handleAddExpense = (exp: Expense) => {
     setState(p => {
-      // RESET DE MANUTENÇÃO: Ao lançar um custo, verifica se ele "cumpre" uma tarefa da garagem
       const updatedMaint = p.maintenance.map(task => {
-        const expDesc = exp.description.toLowerCase().trim();
-        const taskName = task.name.toLowerCase().trim();
-        // Se a descrição do custo contém o nome da tarefa, resetamos o odômetro da tarefa
-        if (expDesc.includes(taskName) || taskName.includes(expDesc) || (exp.category === 'MANUTENÇÃO' && expDesc.includes(taskName))) {
+        const descLower = exp.description.toLowerCase();
+        const taskLower = task.name.toLowerCase();
+        if (descLower.includes(taskLower) || taskLower.includes(descLower)) {
           return { ...task, lastOdo: p.user?.lastOdometer || task.lastOdo, lastCost: exp.amount };
         }
         return task;
       });
-
       return {
         ...p,
         expenses: [exp, ...p.expenses],
@@ -195,26 +200,27 @@ const App: React.FC = () => {
   const handleRefuel = (entry: RefuelEntry) => {
     setState(p => {
       if (!p.user) return p;
-      let newLevel = p.user.currentFuelLevel + entry.liters;
-      if (entry.isFullTank) newLevel = p.user.car.tankCapacity;
+      const newLevel = Math.min(p.user.car.tankCapacity, p.user.currentFuelLevel + entry.liters);
       return {
         ...p,
         refuels: [entry, ...p.refuels],
-        user: { ...p.user, currentFuelLevel: Math.min(p.user.car.tankCapacity, newLevel) }
+        user: { ...p.user, currentFuelLevel: entry.isFullTank ? p.user.car.tankCapacity : newLevel }
       };
     });
   };
 
-  if (!state.isLoaded) return <div className="h-screen bg-[#020617] flex items-center justify-center text-blue-500 font-black italic animate-pulse text-2xl uppercase tracking-tighter">SINCRONIZANDO...</div>;
+  const netToday = useMemo(() => state.currentRaces.reduce((acc, r) => acc + r.netProfit, 0), [state.currentRaces]);
+
+  if (!state.isLoaded) return <div className="h-screen bg-[#020617] flex items-center justify-center text-blue-500 font-black animate-pulse text-2xl uppercase tracking-widest italic">Iniciando Auditoria...</div>;
 
   return (
     <div className="flex flex-col h-screen bg-[#020617] text-slate-100 overflow-hidden no-select">
       <main className="flex-1 overflow-y-auto px-4 safe-scroll">
         {view === 'LANDING' && <Landing user={state.user} onStart={() => setView('ONBOARDING')} onSelect={() => setView('HOME')} onNewRegistration={() => { localStorage.clear(); window.location.reload(); }} onInstall={() => {}} canInstall={false} />}
-        {view === 'ONBOARDING' && <Onboarding ai={ai} onComplete={(u) => { setState(p => ({ ...p, user: u })); setView('HOME'); }} />}
+        {view === 'ONBOARDING' && <Onboarding onComplete={(u) => { setState(p => ({ ...p, user: u })); setView('HOME'); }} />}
         {view === 'HOME' && state.user && (
           <Home 
-            user={state.user} phase={phase} setPhase={setPhase} currentRaces={state.currentRaces} sessions={state.sessions} trackedKm={trackedKm}
+            user={state.user} phase={phase} setPhase={setPhase} currentRaces={state.currentRaces} sessions={state.sessions} trackedKm={trackedKm} maintCostPerKm={dynamicMaintCostPerKm}
             onFinishRace={handleFinishRace} onFinishShift={handleFinishShift} onStartShift={handleStartShift} 
             onUpdateUser={(u) => setState(p => ({...p, user: u}))} onRemoveRace={(id) => setState(p => ({...p, currentRaces: p.currentRaces.filter(x => x.id !== id)}))}
           />
@@ -224,6 +230,8 @@ const App: React.FC = () => {
         {view === 'CUSTOS' && <Custos expenses={state.expenses} refuels={state.refuels} onAdd={handleAddExpense} onRemoveExpense={(id) => setState(p => ({ ...p, expenses: p.expenses.filter(x => x.id !== id) }))} onRemoveRefuel={(id) => setState(p => ({ ...p, refuels: p.refuels.filter(x => x.id !== id) }))} isWorking={phase !== 'IDLE'} />}
         {view === 'VEICULO' && state.user && <Veiculo user={state.user} maintenance={state.maintenance} onUpsert={(m) => setState(p => ({ ...p, maintenance: [...p.maintenance.filter(item => item.id !== m.id), m] }))} onDelete={(id) => setState(p => ({ ...p, maintenance: p.maintenance.filter(item => item.id !== id) }))} maintCostPerKm={dynamicMaintCostPerKm} currentRaces={state.currentRaces} sessions={state.sessions} />}
       </main>
+
+      {phase !== 'IDLE' && <FloatingTracker phase={phase} netToday={netToday} currentView={view} onSwitchPhase={(p) => setPhase(p)} onAddRace={() => (window as any).AppLogic.addRace()} />}
       
       {state.user && view !== 'LANDING' && view !== 'ONBOARDING' && (
         <nav className="fixed bottom-6 left-6 right-6 h-16 bg-[#0f172a]/95 backdrop-blur-xl border border-white/5 rounded-3xl flex justify-around items-center shadow-2xl z-50">

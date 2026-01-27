@@ -15,28 +15,24 @@ const FloatingTracker: React.FC<Props> = ({ phase, netToday, currentView, onSwit
   const [expanded, setExpanded] = useState(false);
 
   const getPhaseIcon = () => {
-    switch (phase) {
-      case 'PARTICULAR': return <Car size={16} />;
-      case 'DESLOCAMENTO': return <Navigation size={16} className="animate-pulse" />;
-      case 'PASSAGEIRO': return <Users size={16} className="text-white" />;
-      default: return <Play size={16} />;
-    }
+    if (phase === 'PARTICULAR') return <Car size={16} />;
+    if (phase === 'DESLOCAMENTO') return <Navigation size={16} className="animate-pulse" />;
+    if (phase === 'PASSAGEIRO') return <Users size={16} className="text-white" />;
+    return <Play size={16} />;
   };
 
   const getPhaseText = () => {
-    switch (phase) {
-      case 'PARTICULAR': return 'Modo Particular';
-      case 'DESLOCAMENTO': return 'Buscando Pax';
-      case 'PASSAGEIRO': return 'Em Corrida';
-      default: return 'IDLE';
-    }
+    if (phase === 'PARTICULAR') return 'Modo Particular';
+    if (phase === 'DESLOCAMENTO') return 'Buscando Pax';
+    if (phase === 'PASSAGEIRO') return 'Em Corrida';
+    if (phase === 'ON_SHIFT') return 'Em Espera';
+    return 'IDLE';
   };
 
   return (
     <div className={`fixed left-8 right-8 z-[60] transition-all duration-300 ease-in-out ${expanded ? 'bottom-32' : 'bottom-28'}`}>
       <div className={`bg-black border border-white/20 shadow-[0_15px_40px_rgba(0,0,0,0.8)] rounded-[2rem] overflow-hidden transition-all ${expanded ? 'h-auto py-6' : 'h-14 py-0'}`}>
         
-        {/* Compact Bar */}
         <div 
           onClick={() => setExpanded(!expanded)}
           className="h-14 px-6 flex items-center justify-between cursor-pointer"
@@ -56,38 +52,37 @@ const FloatingTracker: React.FC<Props> = ({ phase, netToday, currentView, onSwit
           </div>
         </div>
 
-        {/* Expanded Controls */}
         {expanded && (
           <div className="px-6 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-200">
             <div className="h-px bg-zinc-800 w-full" />
             
             <div className="grid grid-cols-2 gap-3">
-              {phase === 'PARTICULAR' && (
-                <button onClick={() => { onSwitchPhase('DESLOCAMENTO'); setExpanded(false); }} className="col-span-2 bg-white text-black py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2">
+              {(phase === 'PARTICULAR' || phase === 'ON_SHIFT') && (
+                <button onClick={() => { onSwitchPhase('DESLOCAMENTO'); setExpanded(false); }} className="col-span-2 bg-white text-black py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 active:scale-95">
                   <Play size={14} fill="black" /> Iniciar Corrida
                 </button>
               )}
               
               {phase === 'DESLOCAMENTO' && (
-                <button onClick={() => { onSwitchPhase('PASSAGEIRO'); setExpanded(false); }} className="col-span-2 bg-white text-black py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2">
+                <button onClick={() => { onSwitchPhase('PASSAGEIRO'); setExpanded(false); }} className="col-span-2 bg-white text-black py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 active:scale-95">
                   <Users size={14} fill="black" /> Embarcar Passageiro
                 </button>
               )}
 
               {phase === 'PASSAGEIRO' && (
-                <button onClick={() => { onAddRace(); setExpanded(false); }} className="col-span-2 bg-white text-black py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2">
+                <button onClick={() => { onAddRace(); setExpanded(false); }} className="col-span-2 bg-white text-black py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 active:scale-95">
                   <CheckCircle size={14} fill="black" /> Finalizar & Cobrar
                 </button>
               )}
 
               {phase !== 'PARTICULAR' && (
-                <button onClick={() => { onSwitchPhase('PARTICULAR'); setExpanded(false); }} className="col-span-2 border border-zinc-700 text-zinc-400 py-3 rounded-2xl font-black text-[9px] uppercase">
-                  Pausar / Particular
+                <button onClick={() => { onSwitchPhase('PARTICULAR'); setExpanded(false); }} className="col-span-2 border border-zinc-700 text-zinc-400 py-3 rounded-2xl font-black text-[9px] uppercase active:scale-95">
+                  Modo Particular / Pausa
                 </button>
               )}
             </div>
             
-            <p className="text-center text-[8px] text-zinc-600 font-black uppercase tracking-[0.2em]">GPS Ativo • Rastreando KM</p>
+            <p className="text-center text-[8px] text-zinc-600 font-black uppercase tracking-[0.2em]">Auditoria Ativa • Rastreando KM</p>
           </div>
         )}
       </div>

@@ -1,6 +1,6 @@
 
 export type AppView = 'LANDING' | 'ONBOARDING' | 'HOME' | 'FINANCEIRO' | 'POSTOS' | 'CUSTOS' | 'VEICULO';
-export type TrackingPhase = 'IDLE' | 'ON_SHIFT' | 'DESLOCAMENTO' | 'PASSAGEIRO';
+export type TrackingPhase = 'IDLE' | 'ON_SHIFT' | 'DESLOCAMENTO' | 'PASSAGEIRO' | 'PARTICULAR';
 export type FuelType = 'GASOLINA' | 'ETANOL';
 export type ExpenseCategory = 'ALIMENTAÇÃO' | 'ÁGUA' | 'LUZ' | 'TELEFONE' | 'COMBUSTÍVEL' | 'MANUTENÇÃO' | 'OUTROS';
 

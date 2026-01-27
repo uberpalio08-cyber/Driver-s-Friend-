@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { UserProfile, TrackingPhase, Race, AppProfile, TripSession } from '../types';
-import { Play, Users, Flag, Activity, Navigation, Plus, Smartphone, TrendingUp, XCircle, Clock, Fuel, Wrench, MapPin, AlertCircle } from 'lucide-react';
+import { Play, Users, Flag, Activity, Navigation, Plus, Smartphone, TrendingUp, XCircle, Clock, Fuel, Wrench, MapPin, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface Props {
   user: UserProfile;
@@ -10,7 +10,8 @@ interface Props {
   currentRaces: Race[];
   sessions: TripSession[];
   trackedKm: number;
-  onFinishRace: (gross: number, profile: AppProfile) => void;
+  maintCostPerKm: number;
+  onFinishRace: (gross: number, profile: AppProfile, manualKm?: number) => void;
   onFinishShift: (odo: number) => void;
   onStartShift: (odo: number) => void;
   onUpdateUser: (u: UserProfile) => void;
@@ -18,7 +19,7 @@ interface Props {
 }
 
 const Home: React.FC<Props> = ({ 
-  user, phase, currentRaces = [], sessions = [], trackedKm,
+  user, phase, currentRaces = [], sessions = [], trackedKm, maintCostPerKm,
   onFinishRace, onFinishShift, onStartShift, onUpdateUser, onRemoveRace 
 }) => {
   const [showAppSelection, setShowAppSelection] = useState(false);
@@ -30,6 +31,7 @@ const Home: React.FC<Props> = ({
   const [reportPeriod, setReportPeriod] = useState<'D' | 'S' | 'M'>('D');
   const [odoInput, setOdoInput] = useState('');
   const [grossInput, setGrossInput] = useState('');
+  const [manualKmInput, setManualKmInput] = useState('');
 
   const [newApp, setNewApp] = useState({ 
     name: '', isFixedValue: false, fixedAmount: '', taxPercentage: '' 
@@ -37,6 +39,16 @@ const Home: React.FC<Props> = ({
 
   const haptic = (p: number = 20) => (window as any).NativeBridge.vibrate(p);
   const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  useEffect(() => {
+    const handleOpenModal = () => {
+      setGrossInput(activeProfile?.isFixedTax ? activeProfile.defaultGross.toString() : '');
+      setManualKmInput(trackedKm.toFixed(2));
+      setShowFinishRaceModal(true);
+    };
+    window.addEventListener('openFinishRaceModal', handleOpenModal);
+    return () => window.removeEventListener('openFinishRaceModal', handleOpenModal);
+  }, [user.selectedAppProfileId, trackedKm]);
 
   const activeProfile = useMemo(() => 
     user.appProfiles.find(p => p.id === user.selectedAppProfileId) || user.appProfiles[0],
@@ -89,10 +101,12 @@ const Home: React.FC<Props> = ({
 
   const handleFinishRaceClick = () => {
     const gross = parseFloat(grossInput);
+    const manualKm = parseFloat(manualKmInput);
     if (!gross || !activeProfile) return alert("Informe o valor bruto.");
-    onFinishRace(gross, activeProfile);
+    onFinishRace(gross, activeProfile, manualKm);
     setShowFinishRaceModal(false);
     setGrossInput('');
+    setManualKmInput('');
     haptic(50);
   };
 
@@ -114,7 +128,6 @@ const Home: React.FC<Props> = ({
         </div>
       </header>
 
-      {/* DASHBOARD PRINCIPAL */}
       <div className="bg-gradient-to-br from-slate-900 to-black p-8 rounded-[3rem] border border-white/10 shadow-2xl relative overflow-hidden">
          <div className="absolute top-0 right-0 p-8 opacity-5"><TrendingUp size={120} /></div>
          <p className="text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest">LUCRO REAL ({reportPeriod === 'D' ? 'HOJE' : reportPeriod === 'S' ? 'SEMANA' : 'MÊS'})</p>
@@ -143,7 +156,6 @@ const Home: React.FC<Props> = ({
          </div>
       </div>
 
-      {/* FLUXO DE TRABALHO */}
       <div className="px-2 space-y-4">
         {phase === 'IDLE' ? (
            <button 
@@ -167,12 +179,12 @@ const Home: React.FC<Props> = ({
                </div>
                <div className="text-right">
                   <p className="text-[8px] font-black text-slate-600 uppercase">Status</p>
-                  <p className="text-[10px] font-black text-white uppercase italic">{phase === 'ON_SHIFT' ? 'EM ESPERA' : phase === 'DESLOCAMENTO' ? 'A CAMINHO' : 'CORRIDA'}</p>
+                  <p className="text-[10px] font-black text-white uppercase italic">{phase === 'ON_SHIFT' ? 'EM ESPERA' : phase === 'DESLOCAMENTO' ? 'A CAMINHO' : phase === 'PASSAGEIRO' ? 'CORRIDA' : 'PARTICULAR'}</p>
                </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4">
-              {phase === 'ON_SHIFT' && (
+              {(phase === 'ON_SHIFT' || phase === 'PARTICULAR') && (
                 <button onClick={() => (window as any).AppLogic.setPhase('DESLOCAMENTO')} className="w-full bg-blue-600 text-white py-10 rounded-[3rem] font-black uppercase italic text-2xl shadow-2xl flex items-center justify-center gap-4 active:scale-95">
                   <Navigation size={32} /> Aceitar Corrida
                 </button>
@@ -185,7 +197,11 @@ const Home: React.FC<Props> = ({
               )}
 
               {phase === 'PASSAGEIRO' && (
-                <button onClick={() => { setGrossInput(activeProfile?.isFixedTax ? activeProfile.defaultGross.toString() : ''); setShowFinishRaceModal(true); }} className="w-full bg-emerald-600 text-white py-10 rounded-[3rem] font-black uppercase italic text-2xl shadow-2xl flex items-center justify-center gap-4 active:scale-95">
+                <button onClick={() => { 
+                  setGrossInput(activeProfile?.isFixedTax ? activeProfile.defaultGross.toString() : '');
+                  setManualKmInput(trackedKm.toFixed(2));
+                  setShowFinishRaceModal(true); 
+                }} className="w-full bg-emerald-600 text-white py-10 rounded-[3rem] font-black uppercase italic text-2xl shadow-2xl flex items-center justify-center gap-4 active:scale-95">
                   <Flag size={32} /> Finalizar Corrida
                 </button>
               )}
@@ -196,7 +212,6 @@ const Home: React.FC<Props> = ({
         )}
       </div>
 
-      {/* HISTÓRICO RECENTE */}
       <div className="px-2 space-y-3">
         <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-4">Histórico do Turno</h3>
         {currentRaces.length === 0 ? (
@@ -248,7 +263,6 @@ const Home: React.FC<Props> = ({
         )}
       </div>
 
-      {/* MODAL: SELEÇÃO DE APP */}
       {showAppSelection && (
         <div className="fixed inset-0 bg-slate-950/98 z-[999] flex items-center justify-center p-6 animate-up">
            <div className="w-full max-w-sm p-8 bg-slate-900 border border-white/10 rounded-[3rem] space-y-6">
@@ -264,20 +278,82 @@ const Home: React.FC<Props> = ({
                       <span className="text-[10px] font-black uppercase italic truncate w-full text-center text-white">{app.name}</span>
                    </button>
                  ))}
-                 
-                 {user.appProfiles.length === 0 && (
-                   <button onClick={() => { setShowAddApp(true); setShowAppSelection(false); }} className="col-span-2 p-10 border-2 border-dashed border-slate-800 rounded-3xl flex flex-col items-center gap-4 group">
-                      <AlertCircle size={32} className="text-slate-700 group-active:text-blue-500" />
-                      <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest text-center">Toque para cadastrar App</p>
-                   </button>
-                 )}
               </div>
               <button onClick={() => setShowAppSelection(false)} className="w-full text-slate-600 font-black uppercase text-[10px] text-center">Fechar</button>
            </div>
         </div>
       )}
 
-      {/* MODAL: CADASTRO DE APP */}
+      {showFinishRaceModal && (
+        <div className="fixed inset-0 bg-slate-950/98 z-[1000] flex items-center justify-center p-4 animate-up overflow-y-auto">
+          <div className="w-full max-w-sm p-8 bg-slate-900 rounded-[3rem] text-center space-y-6 shadow-2xl border border-emerald-500/20">
+            <h2 className="text-2xl font-black uppercase italic text-white">Finalizar Corrida</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">VALOR BRUTO (RECEBIDO)</p>
+                <input autoFocus type="number" inputMode="decimal" className={inputStyle} placeholder="0,00" value={grossInput} onChange={e => setGrossInput(e.target.value)} />
+              </div>
+
+              <div>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">KM DA CORRIDA (INCL. DESLOC.)</p>
+                <div className="flex gap-2">
+                   <input type="number" inputMode="decimal" className="flex-1 py-4 text-center font-black bg-slate-950 text-white rounded-2xl border border-slate-800" placeholder="KM" value={manualKmInput} onChange={e => setManualKmInput(e.target.value)} />
+                   <button onClick={() => setManualKmInput(trackedKm.toFixed(2))} className="bg-slate-800 px-4 rounded-2xl text-[9px] font-black text-blue-500 uppercase active:scale-90">Reset GPS</button>
+                </div>
+              </div>
+
+              {/* PREVIEW EM TEMPO REAL DOS DESCONTOS */}
+              <div className="bg-black/40 p-4 rounded-2xl space-y-2 text-left">
+                <div className="flex justify-between text-[9px] font-black uppercase">
+                  <span className="text-slate-500">Taxa App ({activeProfile?.taxValue}%):</span>
+                  <span className="text-rose-500">- R$ {formatCurrency((parseFloat(grossInput) || 0) * ((activeProfile?.taxValue || 0) / 100))}</span>
+                </div>
+                <div className="flex justify-between text-[9px] font-black uppercase">
+                  <span className="text-slate-500">Reserva Manut. (R$ {maintCostPerKm.toFixed(4)}/km):</span>
+                  <span className="text-purple-400 font-black">- R$ {formatCurrency((parseFloat(manualKmInput) || 0) * maintCostPerKm)}</span>
+                </div>
+                <div className="flex justify-between text-[9px] font-black uppercase">
+                  <span className="text-slate-500">Gasto Combustível (Est.):</span>
+                  <span className="text-orange-400">- R$ {formatCurrency(((parseFloat(manualKmInput) || 0) / user.calculatedAvgConsumption) * 5.85)}</span>
+                </div>
+                <div className="h-px bg-white/5 my-1" />
+                <div className="flex justify-between text-[11px] font-black uppercase italic">
+                  <span className="text-white">Líquido Estimado:</span>
+                  <span className="text-emerald-400">R$ {formatCurrency((parseFloat(grossInput) || 0) - ((parseFloat(grossInput) || 0) * ((activeProfile?.taxValue || 0) / 100)) - ((parseFloat(manualKmInput) || 0) * maintCostPerKm) - (((parseFloat(manualKmInput) || 0) / user.calculatedAvgConsumption) * 5.85))}</span>
+                </div>
+              </div>
+            </div>
+
+            <button onClick={handleFinishRaceClick} className="w-full bg-emerald-600 text-white py-6 rounded-[2.5rem] font-black text-xl uppercase italic shadow-2xl active:scale-95 border-b-4 border-emerald-900">Salvar Corrida</button>
+            <button onClick={() => setShowFinishRaceModal(false)} className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {showStartOdo && (
+        <div className="fixed inset-0 bg-slate-950/98 z-[999] flex items-center justify-center p-6 animate-up">
+          <div className="w-full max-w-sm p-10 bg-slate-900 rounded-[3rem] text-center space-y-8 shadow-2xl">
+            <h2 className="text-2xl font-black uppercase italic text-white leading-tight">KM INICIAL HOJE</h2>
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Confirme o odômetro do painel</p>
+            <input type="number" autoFocus className={inputStyle} value={odoInput} onChange={e => setOdoInput(e.target.value)} placeholder={user.lastOdometer.toString()} />
+            <button onClick={() => { onStartShift(parseFloat(odoInput)); setShowStartOdo(false); setOdoInput(''); }} className="w-full bg-blue-600 text-white py-6 rounded-[2rem] font-black text-xl uppercase italic shadow-2xl">Abrir Turno</button>
+          </div>
+        </div>
+      )}
+
+      {showEndOdo && (
+        <div className="fixed inset-0 bg-slate-950/98 z-[999] flex items-center justify-center p-6 animate-up">
+          <div className="w-full max-w-sm p-10 bg-slate-900 rounded-[3rem] text-center space-y-8 shadow-2xl">
+            <h2 className="text-2xl font-black uppercase italic text-white leading-tight">FECHAR EXPEDIENTE</h2>
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Informe o KM final do painel</p>
+            <input type="number" autoFocus className={inputStyle} value={odoInput} onChange={e => setOdoInput(e.target.value)} />
+            <button onClick={() => { onFinishShift(parseFloat(odoInput)); setShowEndOdo(false); setOdoInput(''); }} className="w-full bg-rose-600 text-white py-6 rounded-[2rem] font-black text-xl uppercase italic shadow-2xl">Finalizar Turno</button>
+            <button onClick={() => setShowEndOdo(false)} className="text-[10px] font-black text-slate-600 uppercase">Voltar</button>
+          </div>
+        </div>
+      )}
+
       {showAddApp && (
         <div className="fixed inset-0 bg-slate-950/98 z-[1010] flex items-center justify-center p-6 animate-up">
            <div className="w-full max-w-sm p-8 bg-slate-900 border border-white/10 rounded-[3rem] space-y-6">
@@ -296,44 +372,6 @@ const Home: React.FC<Props> = ({
                  <button onClick={() => setShowAddApp(false)} className="w-full text-slate-600 font-black uppercase text-[10px] text-center">Voltar</button>
               </div>
            </div>
-        </div>
-      )}
-
-      {/* MODAL: ODÔMETRO INICIAL */}
-      {showStartOdo && (
-        <div className="fixed inset-0 bg-slate-950/98 z-[999] flex items-center justify-center p-6 animate-up">
-          <div className="w-full max-w-sm p-10 bg-slate-900 rounded-[3rem] text-center space-y-8 shadow-2xl">
-            <h2 className="text-2xl font-black uppercase italic text-white leading-tight">KM INICIAL HOJE</h2>
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Confirme o odômetro do painel</p>
-            <input type="number" autoFocus className={inputStyle} value={odoInput} onChange={e => setOdoInput(e.target.value)} placeholder={user.lastOdometer.toString()} />
-            <button onClick={() => { onStartShift(parseFloat(odoInput)); setShowStartOdo(false); setOdoInput(''); }} className="w-full bg-blue-600 text-white py-6 rounded-[2rem] font-black text-xl uppercase italic shadow-2xl">Abrir Turno</button>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: FINALIZAR CORRIDA */}
-      {showFinishRaceModal && (
-        <div className="fixed inset-0 bg-slate-950/98 z-[1000] flex items-center justify-center p-6 animate-up">
-          <div className="w-full max-w-sm p-10 bg-slate-900 rounded-[3.5rem] text-center space-y-6 shadow-2xl border border-emerald-500/20">
-            <h2 className="text-2xl font-black uppercase italic text-white leading-none">Valor Recebido</h2>
-            <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Distância Rastreada: {trackedKm.toFixed(2)} KM</p>
-            <input autoFocus type="number" inputMode="decimal" className={inputStyle} placeholder="0,00" value={grossInput} onChange={e => setGrossInput(e.target.value)} />
-            <button onClick={handleFinishRaceClick} className="w-full bg-emerald-600 text-white py-6 rounded-[2.5rem] font-black text-xl uppercase italic shadow-2xl active:scale-95">Salvar Corrida</button>
-            <button onClick={() => setShowFinishRaceModal(false)} className="text-[10px] font-black text-slate-600 uppercase">Cancelar</button>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: ODÔMETRO FINAL */}
-      {showEndOdo && (
-        <div className="fixed inset-0 bg-slate-950/98 z-[999] flex items-center justify-center p-6 animate-up">
-          <div className="w-full max-w-sm p-10 bg-slate-900 rounded-[3rem] text-center space-y-8 shadow-2xl">
-            <h2 className="text-2xl font-black uppercase italic text-white leading-tight">FECHAR EXPEDIENTE</h2>
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Informe o KM final do painel</p>
-            <input type="number" autoFocus className={inputStyle} value={odoInput} onChange={e => setOdoInput(e.target.value)} />
-            <button onClick={() => { onFinishShift(parseFloat(odoInput)); setShowEndOdo(false); setOdoInput(''); }} className="w-full bg-rose-600 text-white py-6 rounded-[2rem] font-black text-xl uppercase italic shadow-2xl">Finalizar Turno</button>
-            <button onClick={() => setShowEndOdo(false)} className="text-[10px] font-black text-slate-600 uppercase">Voltar</button>
-          </div>
         </div>
       )}
     </div>

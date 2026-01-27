@@ -2,10 +2,9 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.driversfriend.pro',
-  appName: 'Driver\'s Friend Pro',
+  appId: 'com.seuapp.driverfriend',
+  appName: "Driver's Friend Pro",
   webDir: 'dist',
-  bundledWebRuntime: false,
   server: {
     androidScheme: 'https'
   },

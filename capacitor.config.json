@@ -1,0 +1,7 @@
+
+{
+  "appId": "com.driversfriend.pro",
+  "appName": "Driver's Friend Pro",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
