@@ -10,8 +10,12 @@ import Custos from './components/Custos';
 import Veiculo from './components/Veiculo';
 import FloatingTracker from './components/FloatingTracker';
 import { LayoutDashboard, Wallet, Fuel, Receipt, Car } from 'lucide-react';
+import { Geolocation } from '@capacitor/geolocation';
+import { Network } from '@capacitor/network';
+import { Capacitor } from '@capacitor/core';
 
 const STORAGE_KEY = 'drivers_friend_pro_v20_final';
+const isNative = Capacitor.isNativePlatform();
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
@@ -20,9 +24,11 @@ const App: React.FC = () => {
   const [view, setView] = useState<AppView>('LANDING');
   const [phase, setPhase] = useState<TrackingPhase>('IDLE');
   const [trackedKm, setTrackedKm] = useState(0);
+  const [currentCoords, setCurrentCoords] = useState<{lat: number, lng: number} | null>(null);
+  const [isConnected, setIsConnected] = useState(true);
   
-  const lastPos = useRef<GeolocationPosition | null>(null);
-  const watchId = useRef<number | null>(null);
+  const lastPos = useRef<{lat: number, lng: number} | null>(null);
+  const watchId = useRef<string | null>(null);
 
   useEffect(() => {
     (window as any).AppLogic = {
@@ -32,13 +38,23 @@ const App: React.FC = () => {
         window.dispatchEvent(event);
       }
     };
+
+    // Monitoramento de Rede Nativa (Somente se disponível)
+    if (isNative) {
+      Network.addListener('networkStatusChange', status => {
+        setIsConnected(status.connected);
+      });
+      Geolocation.requestPermissions().catch(() => {});
+    }
+
+    return () => {
+      if (isNative) Network.removeAllListeners();
+    };
   }, []);
 
-  // CÁLCULO DE RESERVA: Soma o (Custo Estimado / Intervalo) de TODAS as tarefas da garagem
   const dynamicMaintCostPerKm = useMemo(() => {
-    if (state.maintenance.length === 0) return 0; // Se não houver nada na garagem, a reserva é 0
+    if (state.maintenance.length === 0) return 0;
     return state.maintenance.reduce((acc, task) => {
-      // Ex: Óleo (285 / 10000 = 0,0285 por km)
       const taskCostPerKm = task.interval > 0 ? (task.lastCost / task.interval) : 0;
       return acc + taskCostPerKm;
     }, 0);
@@ -51,7 +67,6 @@ const App: React.FC = () => {
         const parsed = JSON.parse(saved);
         setState({ ...parsed.state, isLoaded: true });
         setPhase(parsed.phase || 'IDLE');
-        if(parsed.state.user) setView('LANDING');
       } catch (e) { setState(prev => ({ ...prev, isLoaded: true })); }
     } else setState(prev => ({ ...prev, isLoaded: true }));
   }, []);
@@ -63,32 +78,63 @@ const App: React.FC = () => {
   }, [state, phase]);
 
   useEffect(() => {
-    if (['DESLOCAMENTO', 'PASSAGEIRO', 'PARTICULAR'].includes(phase)) {
-      watchId.current = navigator.geolocation.watchPosition(
-        (pos) => {
-          if (lastPos.current) {
-            const dist = calculateDistance(
-              lastPos.current.coords.latitude, lastPos.current.coords.longitude,
-              pos.coords.latitude, pos.coords.longitude
-            );
-            if (dist > 0.005) {
-                setTrackedKm(prev => prev + dist);
-                if (state.user) {
-                  const fuelUsed = dist / state.user.calculatedAvgConsumption;
-                  setState(p => p.user ? ({...p, user: {...p.user, currentFuelLevel: Math.max(0, p.user.currentFuelLevel - fuelUsed)}}) : p);
-                }
+    const startWatching = async () => {
+      if (watchId.current) {
+        if (isNative) await Geolocation.clearWatch({ id: watchId.current });
+      }
+
+      if (isNative) {
+        try {
+          watchId.current = await Geolocation.watchPosition(
+            { enableHighAccuracy: true, timeout: 5000 },
+            (pos) => {
+              if (pos) handlePositionUpdate(pos.coords.latitude, pos.coords.longitude);
+            }
+          );
+        } catch (e) { setupWebWatch(); }
+      } else {
+        setupWebWatch();
+      }
+    };
+
+    const setupWebWatch = () => {
+      const id = navigator.geolocation.watchPosition(
+        (pos) => handlePositionUpdate(pos.coords.latitude, pos.coords.longitude),
+        null,
+        { enableHighAccuracy: true }
+      );
+      watchId.current = id.toString();
+    };
+
+    const handlePositionUpdate = (latitude: number, longitude: number) => {
+      setCurrentCoords({ lat: latitude, lng: longitude });
+
+      if (['DESLOCAMENTO', 'PASSAGEIRO', 'PARTICULAR'].includes(phase)) {
+        if (lastPos.current) {
+          const dist = calculateDistance(
+            lastPos.current.lat, lastPos.current.lng,
+            latitude, longitude
+          );
+          if (dist > 0.005) {
+            setTrackedKm(prev => prev + dist);
+            if (state.user) {
+              const fuelUsed = dist / state.user.calculatedAvgConsumption;
+              setState(p => p.user ? ({...p, user: {...p.user, currentFuelLevel: Math.max(0, p.user.currentFuelLevel - fuelUsed)}}) : p);
             }
           }
-          lastPos.current = pos;
-        },
-        (err) => console.error("GPS Error:", err),
-        { enableHighAccuracy: true, maximumAge: 0 }
-      );
-    } else {
-      if (watchId.current) navigator.geolocation.clearWatch(watchId.current);
-      lastPos.current = null;
-    }
-    return () => { if (watchId.current) navigator.geolocation.clearWatch(watchId.current); };
+        }
+      }
+      lastPos.current = { lat: latitude, lng: longitude };
+    };
+
+    startWatching();
+    
+    return () => {
+      if (watchId.current) {
+        if (isNative) Geolocation.clearWatch({ id: watchId.current });
+        else navigator.geolocation.clearWatch(parseInt(watchId.current));
+      }
+    };
   }, [phase, state.user?.calculatedAvgConsumption]);
 
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -104,21 +150,11 @@ const App: React.FC = () => {
 
   const handleFinishRace = (gross: number, profile: AppProfile, manualKm?: number) => {
     if (!state.user) return;
-    
     const kmOfThisRace = (manualKm !== undefined && manualKm > 0) ? manualKm : trackedKm;
-    
-    // 1. Taxa do App
     const appTax = gross * (profile.taxValue / 100);
-    
-    // 2. Combustível
     const fuelPrice = state.refuels[0]?.pricePerLiter || 5.85;
     const fuelCost = kmOfThisRace > 0 ? (kmOfThisRace / state.user.calculatedAvgConsumption) * fuelPrice : 0;
-    
-    // 3. Reserva de Manutenção (CALCULADA POR KM RODADO)
-    // Se dynamicMaintCostPerKm for 0.0285 e rodou 10km, reserva 0.285
     const maintRes = kmOfThisRace > 0 ? kmOfThisRace * dynamicMaintCostPerKm : 0;
-    
-    // 4. Lucro Líquido Real = Bruto - Taxas - Combustível - Manutenção
     const net = gross - appTax - fuelCost - maintRes;
 
     const newRace: Race = {
@@ -215,12 +251,19 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-[#020617] text-slate-100 overflow-hidden no-select">
+      {!isConnected && (
+        <div className="bg-rose-600 text-[10px] font-black uppercase text-center py-1 animate-pulse z-[100]">
+          Modo Offline: Dados móveis desconectados
+        </div>
+      )}
+      
       <main className="flex-1 overflow-y-auto px-4 safe-scroll">
         {view === 'LANDING' && <Landing user={state.user} onStart={() => setView('ONBOARDING')} onSelect={() => setView('HOME')} onNewRegistration={() => { localStorage.clear(); window.location.reload(); }} onInstall={() => {}} canInstall={false} />}
         {view === 'ONBOARDING' && <Onboarding onComplete={(u) => { setState(p => ({ ...p, user: u })); setView('HOME'); }} />}
         {view === 'HOME' && state.user && (
           <Home 
             user={state.user} phase={phase} setPhase={setPhase} currentRaces={state.currentRaces} sessions={state.sessions} trackedKm={trackedKm} maintCostPerKm={dynamicMaintCostPerKm}
+            currentCoords={currentCoords}
             onFinishRace={handleFinishRace} onFinishShift={handleFinishShift} onStartShift={handleStartShift} 
             onUpdateUser={(u) => setState(p => ({...p, user: u}))} onRemoveRace={(id) => setState(p => ({...p, currentRaces: p.currentRaces.filter(x => x.id !== id)}))}
           />

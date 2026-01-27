@@ -1,7 +1,7 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { UserProfile, TrackingPhase, Race, AppProfile, TripSession } from '../types';
-import { Play, Users, Flag, Activity, Navigation, Plus, Smartphone, TrendingUp, XCircle, Clock, Fuel, Wrench, MapPin, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Play, Users, Flag, Activity, Navigation, Plus, Smartphone, TrendingUp, XCircle, Clock, Fuel, Wrench, MapPin, AlertCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 
 interface Props {
   user: UserProfile;
@@ -11,6 +11,7 @@ interface Props {
   sessions: TripSession[];
   trackedKm: number;
   maintCostPerKm: number;
+  currentCoords: {lat: number, lng: number} | null;
   onFinishRace: (gross: number, profile: AppProfile, manualKm?: number) => void;
   onFinishShift: (odo: number) => void;
   onStartShift: (odo: number) => void;
@@ -19,7 +20,7 @@ interface Props {
 }
 
 const Home: React.FC<Props> = ({ 
-  user, phase, currentRaces = [], sessions = [], trackedKm, maintCostPerKm,
+  user, phase, currentRaces = [], sessions = [], trackedKm, maintCostPerKm, currentCoords,
   onFinishRace, onFinishShift, onStartShift, onUpdateUser, onRemoveRace 
 }) => {
   const [showAppSelection, setShowAppSelection] = useState(false);
@@ -33,12 +34,57 @@ const Home: React.FC<Props> = ({
   const [grossInput, setGrossInput] = useState('');
   const [manualKmInput, setManualKmInput] = useState('');
 
+  const mapRef = useRef<HTMLDivElement>(null);
+  const leafletMap = useRef<any>(null);
+  const marker = useRef<any>(null);
+
   const [newApp, setNewApp] = useState({ 
     name: '', isFixedValue: false, fixedAmount: '', taxPercentage: '' 
   });
 
-  const haptic = (p: number = 20) => (window as any).NativeBridge.vibrate(p);
+  const haptic = (style: 'LIGHT' | 'MEDIUM' | 'HEAVY' = 'MEDIUM') => (window as any).NativeBridge.vibrate(style);
   const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Lógica de Inicialização do Mapa
+  useEffect(() => {
+    // Agora o mapa aparece se estiver TRABALHANDO (qualquer fase diferente de IDLE)
+    if (phase !== 'IDLE' && currentCoords && mapRef.current) {
+      const L = (window as any).L;
+      if (!L) return;
+
+      if (!leafletMap.current) {
+        leafletMap.current = L.map(mapRef.current, {
+          zoomControl: false,
+          attributionControl: false,
+          fadeAnimation: true
+        }).setView([currentCoords.lat, currentCoords.lng], 16);
+
+        // Tile layer com contraste melhorado para PC (CartoDB Voyager Dark)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+          maxZoom: 19
+        }).addTo(leafletMap.current);
+
+        const carIcon = L.divIcon({
+          html: `<div class="relative flex items-center justify-center">
+                   <div class="absolute w-10 h-10 bg-blue-500/20 rounded-full animate-ping"></div>
+                   <div class="w-6 h-6 bg-blue-600 border-2 border-white rounded-full shadow-[0_0_15px_rgba(59,130,246,0.8)] z-10"></div>
+                 </div>`,
+          className: '',
+          iconSize: [40, 40],
+          iconAnchor: [20, 20]
+        });
+
+        marker.current = L.marker([currentCoords.lat, currentCoords.lng], { icon: carIcon }).addTo(leafletMap.current);
+      } else {
+        leafletMap.current.setView([currentCoords.lat, currentCoords.lng]);
+        marker.current.setLatLng([currentCoords.lat, currentCoords.lng]);
+      }
+    }
+
+    return () => {
+      // Opcional: manter o mapa vivo se preferir não recarregar
+    };
+  }, [phase, currentCoords]);
 
   useEffect(() => {
     const handleOpenModal = () => {
@@ -107,7 +153,7 @@ const Home: React.FC<Props> = ({
     setShowFinishRaceModal(false);
     setGrossInput('');
     setManualKmInput('');
-    haptic(50);
+    haptic('MEDIUM');
   };
 
   const inputStyle = "w-full py-5 text-4xl font-black text-center bg-slate-950 text-white rounded-3xl border-2 border-slate-800 focus:border-blue-500 outline-none transition-all placeholder-slate-900";
@@ -128,33 +174,53 @@ const Home: React.FC<Props> = ({
         </div>
       </header>
 
-      <div className="bg-gradient-to-br from-slate-900 to-black p-8 rounded-[3rem] border border-white/10 shadow-2xl relative overflow-hidden">
-         <div className="absolute top-0 right-0 p-8 opacity-5"><TrendingUp size={120} /></div>
-         <p className="text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest">LUCRO REAL ({reportPeriod === 'D' ? 'HOJE' : reportPeriod === 'S' ? 'SEMANA' : 'MÊS'})</p>
-         <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-blue-500 italic">R$</span>
-            <p className="text-6xl font-black italic text-white tracking-tighter leading-none">{formatCurrency(performance.net)}</p>
-         </div>
-         
-         <div className="mt-6 grid grid-cols-2 gap-3">
-            <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
-               <p className="text-[7px] font-black text-slate-500 uppercase">Faturamento Bruto</p>
-               <p className="text-sm font-black text-white italic">R$ {formatCurrency(performance.gross)}</p>
-            </div>
-            <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
-               <p className="text-[7px] font-black text-slate-500 uppercase">Custos Acumulados</p>
-               <p className="text-sm font-black text-rose-500 italic">R$ {formatCurrency(performance.costs)}</p>
-            </div>
-         </div>
+      {/* Seção Principal: Mapa ou Dashboard */}
+      {phase !== 'IDLE' ? (
+        <div className="bg-slate-900 h-72 rounded-[3rem] border border-white/10 shadow-2xl relative overflow-hidden group">
+           {!currentCoords && (
+             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-sm text-center p-6">
+                <Loader2 className="animate-spin text-blue-500 mb-4" size={32} />
+                <p className="text-xs font-black text-white uppercase italic tracking-widest">Aguardando Sinal GPS...</p>
+                <p className="text-[8px] text-slate-500 uppercase mt-2">Certifique-se que a localização está permitida no seu navegador/celular.</p>
+             </div>
+           )}
+           <div ref={mapRef} className="w-full h-full z-0" />
+           <div className="absolute top-4 left-4 z-10 bg-black/60 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10">
+              <p className="text-[8px] font-black text-blue-500 uppercase tracking-widest leading-none mb-1">MONITORAMENTO ATIVO</p>
+              <p className="text-[10px] font-black text-white uppercase italic">
+                {phase === 'ON_SHIFT' ? 'Em Espera (Radar On)' : phase === 'DESLOCAMENTO' ? 'Buscando Passageiro' : phase === 'PASSAGEIRO' ? 'Corrida em Curso' : 'Particular'}
+              </p>
+           </div>
+        </div>
+      ) : (
+        <div className="bg-gradient-to-br from-slate-900 to-black p-8 rounded-[3rem] border border-white/10 shadow-2xl relative overflow-hidden">
+           <div className="absolute top-0 right-0 p-8 opacity-5"><TrendingUp size={120} /></div>
+           <p className="text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest">LUCRO REAL ({reportPeriod === 'D' ? 'HOJE' : reportPeriod === 'S' ? 'SEMANA' : 'MÊS'})</p>
+           <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-black text-blue-500 italic">R$</span>
+              <p className="text-6xl font-black italic text-white tracking-tighter leading-none">{formatCurrency(performance.net)}</p>
+           </div>
+           
+           <div className="mt-6 grid grid-cols-2 gap-3">
+              <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                 <p className="text-[7px] font-black text-slate-500 uppercase">Bruto</p>
+                 <p className="text-sm font-black text-white italic">R$ {formatCurrency(performance.gross)}</p>
+              </div>
+              <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                 <p className="text-[7px] font-black text-slate-500 uppercase">Custos</p>
+                 <p className="text-sm font-black text-rose-500 italic">R$ {formatCurrency(performance.costs)}</p>
+              </div>
+           </div>
 
-         <div className="mt-6 flex gap-2">
-            {(['D', 'S', 'M'] as const).map(p => (
-              <button key={p} onClick={() => setReportPeriod(p)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${reportPeriod === p ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-950 text-slate-600 border border-white/5'}`}>
-                {p === 'D' ? 'DIA' : p === 'S' ? 'SEM' : 'MÊS'}
-              </button>
-            ))}
-         </div>
-      </div>
+           <div className="mt-6 flex gap-2">
+              {(['D', 'S', 'M'] as const).map(p => (
+                <button key={p} onClick={() => setReportPeriod(p)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${reportPeriod === p ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-950 text-slate-600 border border-white/5'}`}>
+                  {p === 'D' ? 'DIA' : p === 'S' ? 'SEM' : 'MÊS'}
+                </button>
+              ))}
+           </div>
+        </div>
+      )}
 
       <div className="px-2 space-y-4">
         {phase === 'IDLE' ? (
@@ -178,8 +244,8 @@ const Home: React.FC<Props> = ({
                   </div>
                </div>
                <div className="text-right">
-                  <p className="text-[8px] font-black text-slate-600 uppercase">Status</p>
-                  <p className="text-[10px] font-black text-white uppercase italic">{phase === 'ON_SHIFT' ? 'EM ESPERA' : phase === 'DESLOCAMENTO' ? 'A CAMINHO' : phase === 'PASSAGEIRO' ? 'CORRIDA' : 'PARTICULAR'}</p>
+                  <p className="text-[8px] font-black text-slate-600 uppercase">Odômetro Painel</p>
+                  <p className="text-[10px] font-black text-white uppercase italic">{user.lastOdometer} KM</p>
                </div>
             </div>
 
@@ -231,7 +297,7 @@ const Home: React.FC<Props> = ({
                   </div>
                   <div className="text-right">
                      <p className="text-xl font-black text-emerald-400 italic leading-none">R$ {formatCurrency(race.netProfit)}</p>
-                     <p className="text-[7px] font-black text-emerald-600 uppercase mt-1">LUCRO NO BOLSO</p>
+                     <p className="text-[7px] font-black text-emerald-600 uppercase mt-1">LÍQUIDO</p>
                   </div>
                </div>
 
@@ -250,7 +316,7 @@ const Home: React.FC<Props> = ({
                   </div>
                   <div className="border-l border-white/5">
                      <p className="text-[10px] font-black text-purple-400 italic">- R$ {formatCurrency(race.maintReserve)}</p>
-                     <p className="text-[6px] font-black text-slate-600 uppercase">Revisão</p>
+                     <p className="text-[6px] font-black text-slate-600 uppercase">Manut.</p>
                   </div>
                </div>
 
@@ -296,31 +362,21 @@ const Home: React.FC<Props> = ({
               </div>
 
               <div>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">KM DA CORRIDA (INCL. DESLOC.)</p>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">KM DA CORRIDA (GPS)</p>
                 <div className="flex gap-2">
                    <input type="number" inputMode="decimal" className="flex-1 py-4 text-center font-black bg-slate-950 text-white rounded-2xl border border-slate-800" placeholder="KM" value={manualKmInput} onChange={e => setManualKmInput(e.target.value)} />
                    <button onClick={() => setManualKmInput(trackedKm.toFixed(2))} className="bg-slate-800 px-4 rounded-2xl text-[9px] font-black text-blue-500 uppercase active:scale-90">Reset GPS</button>
                 </div>
               </div>
 
-              {/* PREVIEW EM TEMPO REAL DOS DESCONTOS */}
               <div className="bg-black/40 p-4 rounded-2xl space-y-2 text-left">
                 <div className="flex justify-between text-[9px] font-black uppercase">
                   <span className="text-slate-500">Taxa App ({activeProfile?.taxValue}%):</span>
                   <span className="text-rose-500">- R$ {formatCurrency((parseFloat(grossInput) || 0) * ((activeProfile?.taxValue || 0) / 100))}</span>
                 </div>
                 <div className="flex justify-between text-[9px] font-black uppercase">
-                  <span className="text-slate-500">Reserva Manut. (R$ {maintCostPerKm.toFixed(4)}/km):</span>
-                  <span className="text-purple-400 font-black">- R$ {formatCurrency((parseFloat(manualKmInput) || 0) * maintCostPerKm)}</span>
-                </div>
-                <div className="flex justify-between text-[9px] font-black uppercase">
-                  <span className="text-slate-500">Gasto Combustível (Est.):</span>
-                  <span className="text-orange-400">- R$ {formatCurrency(((parseFloat(manualKmInput) || 0) / user.calculatedAvgConsumption) * 5.85)}</span>
-                </div>
-                <div className="h-px bg-white/5 my-1" />
-                <div className="flex justify-between text-[11px] font-black uppercase italic">
-                  <span className="text-white">Líquido Estimado:</span>
-                  <span className="text-emerald-400">R$ {formatCurrency((parseFloat(grossInput) || 0) - ((parseFloat(grossInput) || 0) * ((activeProfile?.taxValue || 0) / 100)) - ((parseFloat(manualKmInput) || 0) * maintCostPerKm) - (((parseFloat(manualKmInput) || 0) / user.calculatedAvgConsumption) * 5.85))}</span>
+                  <span className="text-slate-500">Gasto Est. (Fuel + Manut):</span>
+                  <span className="text-orange-400">- R$ {formatCurrency((parseFloat(manualKmInput) || 0) * (maintCostPerKm + (5.85/user.calculatedAvgConsumption)))}</span>
                 </div>
               </div>
             </div>

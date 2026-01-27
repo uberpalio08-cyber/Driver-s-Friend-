@@ -1,5 +1,5 @@
 {
-  "id": "com.driversfriend.pro",
+  "id": "com.seuapp.driverfriend",
   "name": "Driver's Friend Pro",
   "short_name": "DriversFriend",
   "display": "fullscreen",
@@ -17,5 +17,5 @@
   "requestFramePermissions": [
     "geolocation"
   ],
-  "description": "Inteligência financeira nativa para motoristas profissionais."
+  "description": "Inteligência financeira nativa para motoristas profissionais com suporte a dados móveis e mapas."
 }

@@ -6,7 +6,8 @@ const config: CapacitorConfig = {
   appName: "Driver's Friend Pro",
   webDir: 'dist',
   server: {
-    androidScheme: 'https'
+    androidScheme: 'https',
+    cleartext: false
   },
   plugins: {
     SplashScreen: {
